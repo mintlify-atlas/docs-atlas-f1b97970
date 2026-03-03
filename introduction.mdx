@@ -1,0 +1,103 @@
+---
+title: E-Commerce API
+description: A complete REST API for building modern e-commerce applications with authentication, product management, shopping cart, and order processing
+---
+
+## Welcome to the E-Commerce API
+
+The E-Commerce API is a full-featured REST API built with Node.js and Express that provides all the essential endpoints for building modern e-commerce applications. Whether you're creating a mobile app, web storefront, or integrating with existing systems, this API gives you the tools to manage products, users, orders, and more.
+
+<CardGroup cols={3}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get up and running with your first API call in under 5 minutes
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn how to authenticate your requests with API keys and JWT tokens
+  </Card>
+  <Card title="API reference" icon="book" href="/api/overview">
+    Explore all available endpoints and their parameters
+  </Card>
+</CardGroup>
+
+## Key features
+
+The E-Commerce API provides a complete set of features for building production-ready e-commerce applications:
+
+### User management
+- User registration and login with secure password hashing
+- JWT-based authentication with 8-hour token expiration
+- Profile management including name, email, and profile photo updates
+- Secure password change functionality
+
+### Product catalog
+- Browse products with pagination, sorting, and search
+- Filter products by category
+- Product variants support for sizes, colors, and custom attributes
+- Multiple product images per item
+- Detailed product information including stock levels and pricing
+- Customer reviews and ratings
+
+### Shopping experience
+- Shopping cart management (add, view, remove items)
+- Multiple shipping address support
+- Product review system
+- Category-based product organization
+
+### Security
+- Dual authentication: API key and JWT token validation
+- Separate admin authentication for management operations
+- Rate limiting and request logging
+- Secure file upload handling
+- CORS support for cross-origin requests
+
+## What's included
+
+The API is organized into several key areas:
+
+**Public endpoints** - Access products and categories without authentication. Only requires an API key.
+
+**User endpoints** - Register, login, and manage user profiles. Requires API key and JWT token.
+
+**Cart & orders** - Manage shopping carts and place orders. Requires authentication.
+
+**Admin endpoints** - Product and category management with separate admin authentication.
+
+## Architecture
+
+Built with modern technologies:
+
+- **Express.js** - Fast, minimalist web framework
+- **MySQL** - Relational database for data persistence
+- **JWT** - Secure token-based authentication
+- **bcrypt** - Industry-standard password hashing
+- **Multer** - File upload handling for product images
+- **Swagger** - Interactive API documentation
+
+## Base URL
+
+All API requests are made to:
+
+```
+http://localhost:5000/api
+```
+
+Admin endpoints use:
+
+```
+http://localhost:5000/api/admin
+```
+
+<Note>
+  The base URL will vary depending on your deployment environment. In production, replace `localhost:5000` with your actual domain.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Make your first API call" icon="play" href="/quickstart">
+    Follow the quick start guide to register a user and get your JWT token
+  </Card>
+  <Card title="Explore the API" icon="compass" href="/api/overview">
+    Browse the complete API reference with all endpoints and examples
+  </Card>
+</CardGroup>

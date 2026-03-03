@@ -1,0 +1,431 @@
+---
+title: Middleware pipeline
+description: Understanding the middleware chain that processes every API request
+---
+
+## Overview
+
+Middleware functions in the E-Commerce API handle cross-cutting concerns like authentication, logging, rate limiting, and file uploads. They execute in a specific order, forming a pipeline that processes requests before reaching route handlers.
+
+## Middleware execution order
+
+The order of middleware registration determines execution order:
+
+<Steps>
+  <Step title="Log middleware">
+    First in the chain - logs all requests, checks blocked IPs, and enforces rate limits
+  </Step>
+  
+  <Step title="CORS middleware">
+    Adds Cross-Origin Resource Sharing headers for browser requests
+  </Step>
+  
+  <Step title="Static file middleware">
+    Serves uploaded files from the `/uploads` directory
+  </Step>
+  
+  <Step title="JSON body parser">
+    Parses incoming JSON request bodies
+  </Step>
+  
+  <Step title="Route-specific middleware">
+    Authentication and authorization middleware applied per route group
+  </Step>
+</Steps>
+
+<Warning>
+  Middleware order is critical. For example, `logMiddleware` must come before route handlers to capture all requests, and `express.json()` must come before routes that read `req.body`.
+</Warning>
+
+## Log middleware
+
+Handles request logging, IP blocking, and rate limiting.
+
+### Implementation
+
+```javascript middlewares/logMiddleware.mjs
+import path from "path";
+import fs from "fs";
+import { errorResponse } from "../handler/responseHandler.mjs";
+import { blockedIps } from "../config/blockedIps.mjs";
+import rateLimit from "express-rate-limit";
+
+// Log file setup
+const logDirectory = path.join("logs");
+if (!fs.existsSync(logDirectory)) {
+  fs.mkdirSync(logDirectory);
+}
+const logFilePath = path.join(logDirectory, "requests.log");
+export const logStream = fs.createWriteStream(logFilePath, { flags: "a" });
+
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000,  // 1 minute window
+  max: 100,                  // 100 requests per window
+  handler: (req, res) => errorResponse({ 
+    res, 
+    statusCode: 429, 
+    message: "Too many requests" 
+  }),
+});
+
+export const logMiddleware = (req, res, next) => {
+  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  const timestamp = new Date().toISOString();
+
+  const blockedList = blockedIps;
+  
+  res.on("finish", () => {
+    const statusCode = res.statusCode;
+    const logMessage = `${timestamp} - ${req.method} ${req.originalUrl} - IP: ${ip} - Status: ${statusCode} - ${res.statusMessage} - User-Agent: ${req.headers["user-agent"]} - Query: ${JSON.stringify(req.query)} - Body: ${JSON.stringify(req.body)}\n`;
+    console.log(logMessage);
+    logStream.write(logMessage);
+  });
+  
+  if (blockedList.includes(ip)) {
+    return errorResponse({ res, statusCode: 403, message: "IP is blocked" });
+  }
+  
+  limiter(req, res, next);
+};
+```
+
+### Features
+
+<Accordion title="Request logging">
+  Every request is logged with:
+  - Timestamp (ISO 8601 format)
+  - HTTP method and URL
+  - Client IP address (supports proxy headers)
+  - Response status code
+  - User-Agent header
+  - Query parameters and request body
+  
+  Logs are written to `logs/requests.log` and also output to console.
+</Accordion>
+
+<Accordion title="IP blocking">
+  IPs in the `blockedIps` array are immediately rejected with a 403 status.
+  
+  ```javascript config/blockedIps.mjs
+  export const blockedIps = [
+    "192.168.1.100",
+    "10.0.0.50"
+  ];
+  ```
+</Accordion>
+
+<Accordion title="Rate limiting">
+  Uses `express-rate-limit` to prevent abuse:
+  - **Window**: 1 minute (60,000ms)
+  - **Max requests**: 100 per window per IP
+  - **Response**: 429 status with "Too many requests" message
+  
+  Rate limits are applied after IP blocking checks.
+</Accordion>
+
+<Note>
+  The log stream is closed on application shutdown via `process.on("beforeExit")` to ensure all logs are flushed to disk.
+</Note>
+
+## Authentication middleware
+
+Two middleware functions handle different authentication strategies:
+
+### API key authentication
+
+```javascript middlewares/authMiddleware.mjs
+import { errorResponse } from "../handler/responseHandler.mjs";
+
+export const apiKeyAuth = (req, res, next) => {
+  const apiKey = req.headers["x-api-key"];
+  if (apiKey !== process.env.API_KEY) {
+    return errorResponse({ res, statusCode: 403, message: "Invalid API Key" });
+  }
+  next();
+};
+```
+
+**Usage**: Applied to all public and authenticated routes
+
+**Header required**:
+```plaintext
+x-api-key: your_api_key_here
+```
+
+<Info>
+  Set `API_KEY` in your `.env` file. All API requests (except admin routes) must include this header.
+</Info>
+
+### JWT token authentication
+
+```javascript middlewares/authMiddleware.mjs
+import jwt from "jsonwebtoken";
+import { errorResponse } from "../handler/responseHandler.mjs";
+
+export const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Access Denied" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    errorResponse({ res, statusCode: 400, message: err.message });
+  }
+};
+```
+
+**Usage**: Applied to authenticated routes (user profile, cart, reviews, etc.)
+
+**Header required**:
+```plaintext
+Authorization: Bearer <jwt_token>
+```
+
+The decoded JWT payload is attached to `req.user` for use in controllers:
+
+```javascript Example controller usage
+export const getCart = async (req, res) => {
+  const userId = req.user.id;  // From JWT token
+  
+  const [rows] = await db.execute(
+    "SELECT * FROM carts WHERE user_id = ?",
+    [userId]
+  );
+  // ...
+};
+```
+
+<Tip>
+  The JWT token is obtained by calling `/api/login` or `/api/register` endpoints. Tokens expire after 8 hours by default.
+</Tip>
+
+## Admin middleware
+
+Restricts access to administrative endpoints:
+
+```javascript middlewares/adminMiddleware.mjs
+import { errorResponse } from "../handler/responseHandler.mjs";
+
+export const adminKeyAuth = (req, res, next) => {
+  const adminKey = req.headers["x-api-key"];
+  if (adminKey !== process.env.ADMIN_API_KEY) {
+    return errorResponse({ 
+      res, 
+      statusCode: 403, 
+      message: "Invalid Admin API Key" 
+    });
+  }
+  next();
+};
+```
+
+**Usage**: Applied exclusively to `/api/admin/*` routes
+
+**Header required**:
+```plaintext
+x-api-key: your_admin_api_key_here
+```
+
+<Warning>
+  Keep your `ADMIN_API_KEY` secret and separate from the regular `API_KEY`. Admin routes can add products, categories, and perform sensitive operations.
+</Warning>
+
+## File upload middleware
+
+Handles multipart form data for image uploads using Multer.
+
+### Implementation
+
+```javascript middlewares/fileUpload.mjs
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+const createDirectory = (dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+};
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const currentUrl = req.originalUrl;
+    const route = currentUrl.split('/')[3];
+    const uploadPath = path.join('uploads', route);
+
+    createDirectory(uploadPath);
+
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/jpg', 'image/bmp', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, JPG, BMP, and WEBP files are allowed.'), false);
+  }
+};
+
+export const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 1024 * 1024 * 5 }, // 5MB limit
+});
+```
+
+### Configuration
+
+<CodeGroup>
+```plaintext Storage strategy
+Destination: uploads/{route_name}/
+Filename: {timestamp}-{random}.{extension}
+Example: uploads/product/1709421234567-123456789.jpg
+```
+
+```plaintext File restrictions
+Allowed types: JPEG, PNG, GIF, JPG, BMP, WEBP
+Max file size: 5MB
+Filename: Sanitized with unique timestamp
+```
+</CodeGroup>
+
+### Usage patterns
+
+#### Single file upload
+
+```javascript adminRoutes.mjs
+import { upload } from "../middlewares/fileUpload.mjs";
+import { uploadErrorHandler } from "../handler/responseHandler.mjs";
+
+router.post("/category", 
+  upload.single("image"),      // Handles single file with field name "image"
+  addCategory,                 // Controller function
+  uploadErrorHandler           // Error handler
+);
+```
+
+Access uploaded file in controller:
+
+```javascript
+export const addCategory = async (req, res) => {
+  const imagePath = req.file.path;  // "uploads/category/1709421234567-123456789.jpg"
+  // ...
+};
+```
+
+#### Multiple file upload
+
+```javascript adminRoutes.mjs
+router.post("/product", 
+  upload.array("images"),      // Handles multiple files with field name "images"
+  addProduct,
+  uploadErrorHandler
+);
+```
+
+Access uploaded files in controller:
+
+```javascript productController.mjs
+export const addProduct = async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return errorResponse({
+      res,
+      statusCode: 400,
+      message: "At least one image file is required",
+    });
+  }
+
+  const imgUrls = req.files.map((file) => file.path.replaceAll("\\", "/"));
+  // Store in database as JSON
+  await db.execute(
+    "INSERT INTO products (img_urls) VALUES (?)",
+    [JSON.stringify(imgUrls)]
+  );
+};
+```
+
+<Accordion title="Why normalize file paths?">
+  Windows uses backslashes (`\`) in file paths while URLs use forward slashes (`/`). The `.replaceAll("\\", "/")` call normalizes paths for consistent URL generation:
+  
+  ```javascript
+  // Windows: "uploads\\product\\file.jpg"
+  // Normalized: "uploads/product/file.jpg"
+  ```
+</Accordion>
+
+### Error handling
+
+File upload errors are caught by a specialized error handler:
+
+```javascript handler/responseHandler.mjs
+export const uploadErrorHandler = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    return errorResponse({
+      res,
+      statusCode: 400,
+      message: `Upload error: ${err.message}`,
+    });
+  } else if (err) {
+    return errorResponse({
+      res,
+      statusCode: 400,
+      message: err.message,
+    });
+  }
+  next();
+};
+```
+
+This handler must be placed **after** the controller in the middleware chain.
+
+<Note>
+  The `uploadErrorHandler` catches errors from both Multer (file upload errors) and the custom `fileFilter` function (invalid file types).
+</Note>
+
+## Middleware chaining
+
+Middleware can be combined in route definitions:
+
+```javascript app.mjs
+// Admin routes: Admin key only
+app.use("/api/admin", adminKeyAuth, adminRoutes);
+
+// Public routes: API key only
+app.use("/api", apiKeyAuth, publicRoutes);
+
+// Authenticated routes: API key + JWT token
+app.use("/api", apiKeyAuth, authenticate, authenticateRoutes);
+```
+
+Each middleware calls `next()` to pass control to the next middleware or route handler. If any middleware sends a response or throws an error, the chain stops.
+
+<Tip>
+  Order matters in middleware chains. Place authentication before authorization, and validation before business logic.
+</Tip>
+
+## Serving static files
+
+Uploaded files are served as static assets:
+
+```javascript app.mjs
+app.use("/uploads", express.static("uploads"));
+```
+
+This makes uploaded files accessible at:
+```plaintext
+http://localhost:5000/uploads/product/1709421234567-123456789.jpg
+```
+
+<Info>
+  Static file serving bypasses all other middleware, providing direct file access without authentication checks.
+</Info>

@@ -1,0 +1,117 @@
+---
+title: 'Create Review'
+api: 'POST /api/review'
+description: 'Add a new review for a product'
+---
+
+## Authentication
+
+This endpoint requires JWT authentication. Include your bearer token in the Authorization header.
+
+```bash
+Authorization: Bearer <your_token>
+```
+
+## Request Body
+
+<ParamField body="productId" type="string" required>
+  The ID of the product to review. The product must exist in the database.
+</ParamField>
+
+<ParamField body="rating" type="number" required>
+  The rating for the product. Must be between 1 and 5.
+</ParamField>
+
+<ParamField body="comment" type="string" required>
+  The review comment text.
+</ParamField>
+
+## Response
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code of the response
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The created review data
+  
+  <Expandable title="data properties">
+    <ResponseField name="userId" type="string">
+      The ID of the user who created the review (from JWT token)
+    </ResponseField>
+    
+    <ResponseField name="productId" type="string">
+      The ID of the reviewed product
+    </ResponseField>
+    
+    <ResponseField name="rating" type="number">
+      The rating given (1-5)
+    </ResponseField>
+    
+    <ResponseField name="comment" type="string">
+      The review comment
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X POST https://api.example.com/api/review \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "productId": "12345",
+    "rating": 5,
+    "comment": "Great product! Highly recommended."
+  }'
+```
+
+## Example Response
+
+<ResponseExample>
+```json Success Response (201)
+{
+  "statusCode": 201,
+  "message": "Review added successfully",
+  "data": {
+    "userId": "user123",
+    "productId": "12345",
+    "rating": 5,
+    "comment": "Great product! Highly recommended."
+  }
+}
+```
+
+```json Error Response (400 - Missing Fields)
+{
+  "statusCode": 400,
+  "message": "productId, rating, and comment are required"
+}
+```
+
+```json Error Response (400 - Invalid Rating)
+{
+  "statusCode": 400,
+  "message": "Rating must be between 1 and 5"
+}
+```
+
+```json Error Response (404 - Product Not Found)
+{
+  "statusCode": 404,
+  "message": "Product not found"
+}
+```
+</ResponseExample>
+
+## Notes
+
+- The review is automatically associated with the authenticated user
+- After adding a review, the product's average rating is automatically updated
+- The rating must be an integer between 1 and 5
+- All fields are required

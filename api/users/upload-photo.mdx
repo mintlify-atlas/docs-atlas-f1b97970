@@ -1,0 +1,164 @@
+---
+title: 'Upload Profile Photo'
+api: 'POST /api/user/profile-photo'
+---
+
+Uploads a profile photo for the authenticated user.
+
+## Authentication
+
+This endpoint requires both API key and JWT authentication.
+
+### Required Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key for accessing the API
+</ParamField>
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token in the format: `Bearer <token>`
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `multipart/form-data`
+</ParamField>
+
+## Request Body
+
+This endpoint accepts form-data with a file upload.
+
+<ParamField body="photo" type="file" required>
+  Profile photo file to upload
+  
+  **Allowed formats:** JPEG, PNG, GIF, JPG, BMP, WEBP
+  
+  **Maximum size:** 5MB
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message indicating the result of the upload
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Contains information about the database update operation
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl --request POST \
+  --url https://api.example.com/api/user/profile-photo \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' \
+  --header 'x-api-key: your_api_key_here' \
+  --form 'photo=@/path/to/profile-photo.jpg'
+```
+
+```javascript JavaScript (Fetch)
+const formData = new FormData();
+formData.append('photo', fileInput.files[0]);
+
+fetch('https://api.example.com/api/user/profile-photo', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    'x-api-key': 'your_api_key_here'
+  },
+  body: formData
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+## Example Response
+
+<ResponseExample>
+```json Success Response
+{
+  "success": true,
+  "message": "Profile photo updated successfully",
+  "data": {
+    "fieldCount": 0,
+    "affectedRows": 1,
+    "insertId": 0,
+    "info": "Rows matched: 1  Changed: 1  Warnings: 0",
+    "serverStatus": 2,
+    "warningStatus": 0,
+    "changedRows": 1
+  }
+}
+```
+</ResponseExample>
+
+## Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - No File
+{
+  "success": false,
+  "message": "photo is required"
+}
+```
+
+```json 400 Bad Request - Invalid File Type
+{
+  "success": false,
+  "message": "Invalid file type. Only JPEG, PNG, GIF, JPG, BMP, and WEBP files are allowed."
+}
+```
+
+```json 401 Unauthorized
+{
+  "error": "Access Denied"
+}
+```
+
+```json 403 Forbidden
+{
+  "success": false,
+  "message": "Invalid API Key"
+}
+```
+
+```json 404 Not Found
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
+```json 413 Payload Too Large
+{
+  "success": false,
+  "message": "File too large. Maximum size is 5MB."
+}
+```
+
+```json 500 Internal Server Error
+{
+  "success": false,
+  "message": "Internal Server Error"
+}
+```
+</ResponseExample>
+
+## File Upload Details
+
+- **Field name:** `photo` (must match the multipart form field name)
+- **Allowed MIME types:** `image/jpeg`, `image/png`, `image/gif`, `image/jpg`, `image/bmp`, `image/webp`
+- **Maximum file size:** 5MB (5,242,880 bytes)
+- **Storage location:** Files are stored in `uploads/profile-photo/` directory
+- **Filename format:** `{timestamp}-{random}.{extension}` (e.g., `1709123456789-123456789.jpg`)
+- **URL format:** The photo URL stored in the database follows the pattern: `uploads/profile-photo/{filename}`
+
+## Notes
+
+- The uploaded file is automatically validated for type and size
+- The profile photo URL is stored in the `profile_photo` field of the user record
+- Previous profile photos are not automatically deleted - consider implementing cleanup logic if needed
+- The photo can be accessed via the static file endpoint: `/uploads/profile-photo/{filename}`

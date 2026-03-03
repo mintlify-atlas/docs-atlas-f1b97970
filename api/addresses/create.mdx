@@ -1,0 +1,94 @@
+---
+title: 'Create Address'
+api: 'POST /api/address'
+description: 'Add a new address for the authenticated user'
+---
+
+## Authentication
+
+This endpoint requires JWT authentication. Include your bearer token in the Authorization header.
+
+```bash
+Authorization: Bearer <your_token>
+```
+
+## Request Body
+
+<ParamField body="address" type="string" required>
+  The street address
+</ParamField>
+
+<ParamField body="subdistrict" type="string" required>
+  The subdistrict (kelurahan/desa)
+</ParamField>
+
+<ParamField body="district" type="string" required>
+  The district (kecamatan)
+</ParamField>
+
+<ParamField body="regency" type="string" required>
+  The regency or city (kabupaten/kota)
+</ParamField>
+
+<ParamField body="province" type="string" required>
+  The province
+</ParamField>
+
+<ParamField body="postalCode" type="string" required>
+  The postal code
+</ParamField>
+
+<ParamField body="phone" type="string" required>
+  Contact phone number for this address
+</ParamField>
+
+## Response
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code of the response
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X POST https://api.example.com/api/address \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "Jl. Sudirman No. 123",
+    "subdistrict": "Senayan",
+    "district": "Kebayoran Baru",
+    "regency": "Jakarta Selatan",
+    "province": "DKI Jakarta",
+    "postalCode": "12190",
+    "phone": "081234567890"
+  }'
+```
+
+## Example Response
+
+<ResponseExample>
+```json Success Response (201)
+{
+  "statusCode": 201,
+  "message": "Address added successfully"
+}
+```
+
+```json Error Response (400 - Missing Fields)
+{
+  "statusCode": 400,
+  "message": "All fields are required"
+}
+```
+</ResponseExample>
+
+## Notes
+
+- The address is automatically associated with the authenticated user
+- All fields are required
+- The user can have multiple saved addresses

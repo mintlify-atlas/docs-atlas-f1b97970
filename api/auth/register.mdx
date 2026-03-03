@@ -1,0 +1,196 @@
+---
+title: 'Register User'
+api: 'POST /api/register'
+description: 'Register a new user account and receive a JWT token'
+---
+
+## Endpoint
+
+```
+POST http://localhost:5000/api/register
+```
+
+## Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key for accessing the API
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`
+</ParamField>
+
+## Request Body
+
+<ParamField body="name" type="string" required>
+  The full name of the user
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  The user's email address. Must be unique and not already registered.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's password. Will be hashed using bcrypt with 10 salt rounds before storage.
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="string">
+  Response status - "OK" for success
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message - "User Registered" on success
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="data">
+    <ResponseField name="token" type="string">
+      JWT token valid for 8 hours. Contains user id, email, and name in the payload.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Code Example
+
+Here's the actual implementation from the controller:
+
+```javascript
+export const register = async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return errorResponse({
+      res,
+      statusCode: 400,
+      message: "All fields are required",
+    });
+  }
+
+  try {
+    const [existingUser] = await db.execute(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
+    if (existingUser.length > 0) {
+      return errorResponse({
+        res,
+        statusCode: 409,
+        message: "Email is already registered",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const [result] = await db.execute(
+      "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
+      [name, email, hashedPassword]
+    );
+
+    const token = jwt.sign(
+      { id: result.insertId, email, name },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    successResponse({
+      res,
+      statusCode: 201,
+      message: "User Registered",
+      data: { token },
+    });
+  } catch (err) {
+    errorResponse({ res, statusCode: 500, message: "Internal Server Error" });
+  }
+};
+```
+
+## Request Example
+
+```bash
+curl -X POST http://localhost:5000/api/register \
+  -H "x-api-key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "securepassword123"
+  }'
+```
+
+## Response Examples
+
+### Success Response (201)
+
+```json
+{
+  "status": "OK",
+  "message": "User Registered",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+### Error Responses
+
+#### Missing Fields (400)
+
+```json
+{
+  "status": "ERROR",
+  "message": "All fields are required",
+  "data": null
+}
+```
+
+#### Invalid API Key (403)
+
+```json
+{
+  "status": "ERROR",
+  "message": "Invalid API Key",
+  "data": null
+}
+```
+
+#### Email Already Registered (409)
+
+```json
+{
+  "status": "ERROR",
+  "message": "Email is already registered",
+  "data": null
+}
+```
+
+#### Server Error (500)
+
+```json
+{
+  "status": "ERROR",
+  "message": "Internal Server Error",
+  "data": null
+}
+```
+
+## Token Usage
+
+After successful registration, use the returned JWT token for authenticated endpoints by including it in the Authorization header:
+
+```
+Authorization: Bearer <token>
+```
+
+The token expires after 8 hours and contains the following payload:
+
+```json
+{
+  "id": 1,
+  "email": "john@example.com",
+  "name": "John Doe",
+  "iat": 1234567890,
+  "exp": 1234596690
+}
+```

@@ -1,0 +1,206 @@
+---
+title: 'Login User'
+api: 'POST /api/login'
+description: 'Authenticate a user and receive a JWT token'
+---
+
+## Endpoint
+
+```
+POST http://localhost:5000/api/login
+```
+
+## Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key for accessing the API
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`
+</ParamField>
+
+## Request Body
+
+<ParamField body="email" type="string" required>
+  The user's registered email address
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's password. Will be compared against the hashed password in the database.
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="string">
+  Response status - "OK" for success
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message - "Login successful" on success
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="data">
+    <ResponseField name="token" type="string">
+      JWT token valid for 8 hours. Contains user id, email, name, and profile_photo in the payload.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Code Example
+
+Here's the actual implementation from the controller:
+
+```javascript
+export const login = async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return errorResponse({
+      res,
+      statusCode: 400,
+      message: "All fields are required",
+    });
+  }
+
+  try {
+    const [rows] = await db.execute("SELECT * FROM users WHERE email = ?", [
+      email,
+    ]);
+    if (rows.length === 0) {
+      return errorResponse({ res, statusCode: 404, message: "User not found" });
+    }
+
+    const user = rows[0];
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return errorResponse({
+        res,
+        statusCode: 401,
+        message: "Incorrect Password",
+      });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name, profile_photo: user.profile_photo },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    successResponse({
+      res,
+      statusCode: 200,
+      message: "Login successful",
+      data: { token },
+    });
+  } catch (err) {
+    errorResponse({ res, statusCode: 500, message: "Internal Server Error" });
+  }
+};
+```
+
+## Request Example
+
+```bash
+curl -X POST http://localhost:5000/api/login \
+  -H "x-api-key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "securepassword123"
+  }'
+```
+
+## Response Examples
+
+### Success Response (200)
+
+```json
+{
+  "status": "OK",
+  "message": "Login successful",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+### Error Responses
+
+#### Missing Fields (400)
+
+```json
+{
+  "status": "ERROR",
+  "message": "All fields are required",
+  "data": null
+}
+```
+
+#### Incorrect Password (401)
+
+```json
+{
+  "status": "ERROR",
+  "message": "Incorrect Password",
+  "data": null
+}
+```
+
+#### Invalid API Key (403)
+
+```json
+{
+  "status": "ERROR",
+  "message": "Invalid API Key",
+  "data": null
+}
+```
+
+#### User Not Found (404)
+
+```json
+{
+  "status": "ERROR",
+  "message": "User not found",
+  "data": null
+}
+```
+
+#### Server Error (500)
+
+```json
+{
+  "status": "ERROR",
+  "message": "Internal Server Error",
+  "data": null
+}
+```
+
+## Token Usage
+
+After successful login, use the returned JWT token for authenticated endpoints by including it in the Authorization header:
+
+```
+Authorization: Bearer <token>
+```
+
+The token expires after 8 hours and contains the following payload:
+
+```json
+{
+  "id": 1,
+  "email": "john@example.com",
+  "name": "John Doe",
+  "profile_photo": "path/to/photo.jpg",
+  "iat": 1234567890,
+  "exp": 1234596690
+}
+```
+
+## Security Notes
+
+- Passwords are hashed using bcrypt with 10 salt rounds before storage
+- Password comparison is done using `bcrypt.compare()` for secure validation
+- JWT tokens are signed with a secret key stored in environment variables
+- All requests require a valid API key in the `x-api-key` header

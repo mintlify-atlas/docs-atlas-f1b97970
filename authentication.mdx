@@ -1,0 +1,307 @@
+---
+title: Authentication
+description: Learn how to authenticate your API requests using API keys and JWT tokens
+---
+
+## Authentication overview
+
+The E-Commerce API uses a dual authentication system to secure endpoints:
+
+1. **API Key Authentication** - Required for all requests to verify the client application
+2. **JWT Token Authentication** - Required for user-specific operations like profile management, cart, and orders
+
+This approach ensures that only authorized applications can access the API, while also maintaining user-specific security for protected resources.
+
+## API key authentication
+
+All API requests must include a valid API key in the request headers. This verifies that the request is coming from an authorized client application.
+
+### How it works
+
+The API key is validated using middleware that checks the `x-api-key` header against the server's configured key:
+
+```javascript authMiddleware.mjs
+export const apiKeyAuth = (req, res, next) => {
+  const apiKey = req.headers["x-api-key"];
+  if (apiKey !== process.env.API_KEY) {
+    return errorResponse({ res, statusCode: 403, message: "Invalid API Key" });
+  }
+  next();
+};
+```
+
+<Note>
+  The API key is stored in the server's `.env` file as `API_KEY`. Contact your API administrator to obtain the key for your environment.
+</Note>
+
+### Using the API key
+
+Include the API key in the `x-api-key` header with every request:
+
+<CodeGroup>
+  ```bash curl
+  curl -X GET http://localhost:5000/api/product \
+    -H "x-api-key: your-api-key-here"
+  ```
+
+  ```javascript fetch
+  const response = await fetch('http://localhost:5000/api/product', {
+    headers: {
+      'x-api-key': 'your-api-key-here'
+    }
+  });
+  ```
+
+  ```python Python
+  import requests
+
+  headers = {'x-api-key': 'your-api-key-here'}
+  response = requests.get('http://localhost:5000/api/product', headers=headers)
+  ```
+</CodeGroup>
+
+### Endpoints requiring only API key
+
+These public endpoints only require the API key header:
+
+- `POST /api/register` - User registration
+- `POST /api/login` - User login
+- `GET /api/category` - List all categories
+- `GET /api/product` - Browse products
+- `GET /api/product/:slug` - Get product details
+
+## JWT token authentication
+
+For user-specific operations, the API uses JSON Web Tokens (JWT) to authenticate requests. JWT tokens are issued when users register or log in, and must be included in subsequent requests to protected endpoints.
+
+### How it works
+
+JWT tokens are validated using middleware that extracts and verifies the token from the Authorization header:
+
+```javascript authMiddleware.mjs
+export const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Access Denied" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    errorResponse({ res, statusCode: 400, message: err.message });
+  }
+};
+```
+
+The decoded token contains user information that's accessible in route handlers via `req.user`.
+
+### Obtaining a JWT token
+
+You can obtain a JWT token through registration or login.
+
+#### Registration
+
+Register a new user to receive a JWT token:
+
+```bash curl
+curl -X POST http://localhost:5000/api/register \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key-here" \
+  -d '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "securePassword123"
+  }'
+```
+
+#### Login
+
+Login with existing credentials to receive a JWT token:
+
+```bash curl
+curl -X POST http://localhost:5000/api/login \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key-here" \
+  -d '{
+    "email": "john@example.com",
+    "password": "securePassword123"
+  }'
+```
+
+Both endpoints return a response with the JWT token:
+
+```json
+{
+  "status": "success",
+  "message": "Login successful",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJqb2huQGV4YW1wbGUuY29tIiwibmFtZSI6IkpvaG4gRG9lIiwicHJvZmlsZV9waG90byI6bnVsbCwiaWF0IjoxNzA5NDU0MDAwLCJleHAiOjE3MDk0ODI4MDB9.signature"
+  }
+}
+```
+
+### Token expiration
+
+JWT tokens are issued with an 8-hour expiration time:
+
+```javascript authController.mjs
+const token = jwt.sign(
+  { id: user.id, email: user.email, name: user.name, profile_photo: user.profile_photo },
+  process.env.JWT_SECRET,
+  { expiresIn: "8h" }
+);
+```
+
+<Warning>
+  After 8 hours, your token will expire and you'll need to login again to obtain a new token.
+</Warning>
+
+### Using the JWT token
+
+Include the JWT token in the `Authorization` header using the Bearer scheme:
+
+<CodeGroup>
+  ```bash curl
+  curl -X GET http://localhost:5000/api/user \
+    -H "x-api-key: your-api-key-here" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+
+  ```javascript fetch
+  const response = await fetch('http://localhost:5000/api/user', {
+    headers: {
+      'x-api-key': 'your-api-key-here',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  ```
+
+  ```python Python
+  import requests
+
+  headers = {
+      'x-api-key': 'your-api-key-here',
+      'Authorization': f'Bearer {token}'
+  }
+  response = requests.get('http://localhost:5000/api/user', headers=headers)
+  ```
+</CodeGroup>
+
+### Endpoints requiring JWT token
+
+These protected endpoints require both the API key AND a valid JWT token:
+
+- `GET /api/user` - Get current user profile
+- `PATCH /api/user` - Update user name or email
+- `PATCH /api/user/password` - Update user password
+- `POST /api/user/profile-photo` - Upload profile photo
+- `POST /api/cart` - Add item to cart
+- `GET /api/cart` - Get user's cart
+- `DELETE /api/cart` - Remove item from cart
+- `POST /api/address` - Add shipping address
+- `GET /api/address` - Get user's addresses
+- `DELETE /api/address` - Delete address
+- `PATCH /api/address` - Update address
+- `POST /api/review` - Add product review
+
+## Admin authentication
+
+Admin endpoints use a separate authentication key for management operations:
+
+```bash curl
+curl -X POST http://localhost:5000/api/admin/product \
+  -H "x-admin-key: your-admin-key-here" \
+  -H "Content-Type: multipart/form-data" \
+  -F "name=New Product" \
+  -F "description=Product description" \
+  -F "price=99.99" \
+  -F "stock=100" \
+  -F "categoryId=1" \
+  -F "images=@product1.jpg"
+```
+
+<Warning>
+  Admin keys grant elevated privileges for creating, updating, and deleting products and categories. Keep admin keys secure and never expose them in client-side code.
+</Warning>
+
+## Authentication flow
+
+Here's a typical authentication flow for a new user:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant Database
+
+    Client->>API: POST /api/register (with API key)
+    API->>API: Validate API key
+    API->>Database: Check if email exists
+    Database-->>API: Email available
+    API->>API: Hash password with bcrypt
+    API->>Database: Insert new user
+    Database-->>API: User created (ID: 1)
+    API->>API: Generate JWT token (8h expiry)
+    API-->>Client: Return JWT token
+    
+    Client->>API: GET /api/user (with API key + JWT)
+    API->>API: Validate API key
+    API->>API: Verify JWT token
+    API->>Database: Fetch user data
+    Database-->>API: User details
+    API-->>Client: Return user profile
+```
+
+## Security best practices
+
+<CardGroup cols={2}>
+  <Card title="Store tokens securely" icon="lock">
+    Never store JWT tokens in localStorage or sessionStorage where they're vulnerable to XSS attacks. Use httpOnly cookies or secure storage mechanisms.
+  </Card>
+  
+  <Card title="Use HTTPS in production" icon="shield">
+    Always use HTTPS in production to encrypt tokens in transit and prevent man-in-the-middle attacks.
+  </Card>
+  
+  <Card title="Implement token refresh" icon="rotate">
+    For production applications, implement a token refresh mechanism to avoid requiring users to re-login every 8 hours.
+  </Card>
+  
+  <Card title="Validate on every request" icon="check">
+    The API validates tokens on every protected request, ensuring expired or invalid tokens are rejected immediately.
+  </Card>
+</CardGroup>
+
+## Error responses
+
+### Invalid API key (403)
+
+```json
+{
+  "status": "error",
+  "message": "Invalid API Key"
+}
+```
+
+### Missing JWT token (401)
+
+```json
+{
+  "error": "Access Denied"
+}
+```
+
+### Expired or invalid JWT token (400)
+
+```json
+{
+  "status": "error",
+  "message": "jwt expired"
+}
+```
+
+<Tip>
+  When you receive a token expiration error, redirect users to the login page to obtain a fresh token.
+</Tip>

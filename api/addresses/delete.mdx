@@ -1,0 +1,57 @@
+---
+title: 'Delete Address'
+api: 'DELETE /api/address'
+description: 'Delete an existing address for the authenticated user'
+---
+
+## Authentication
+
+This endpoint requires JWT authentication. Include your bearer token in the Authorization header.
+
+```bash
+Authorization: Bearer <your_token>
+```
+
+## Request Body
+
+<ParamField body="addressId" type="number" required>
+  The ID of the address to delete. Must belong to the authenticated user.
+</ParamField>
+
+## Response
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code of the response
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X DELETE https://api.example.com/api/address \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "addressId": 1
+  }'
+```
+
+## Example Response
+
+<ResponseExample>
+```json Success Response (200)
+{
+  "statusCode": 200,
+  "message": "Address deleted successfully"
+}
+```
+</ResponseExample>
+
+## Notes
+
+- Only the address owner can delete their own addresses
+- The operation is permanent and cannot be undone
+- If the address doesn't exist or doesn't belong to the user, the operation still returns success

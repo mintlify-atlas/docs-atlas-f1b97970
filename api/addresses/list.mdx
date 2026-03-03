@@ -1,0 +1,112 @@
+---
+title: 'List Addresses'
+api: 'GET /api/address'
+description: 'Retrieve all addresses for the authenticated user'
+---
+
+## Authentication
+
+This endpoint requires JWT authentication. Include your bearer token in the Authorization header.
+
+```bash
+Authorization: Bearer <your_token>
+```
+
+## Response
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code of the response
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of address objects
+  
+  <Expandable title="address object properties">
+    <ResponseField name="id" type="number">
+      The unique identifier for the address
+    </ResponseField>
+    
+    <ResponseField name="user_id" type="number">
+      The ID of the user who owns this address
+    </ResponseField>
+    
+    <ResponseField name="address" type="string">
+      The street address
+    </ResponseField>
+    
+    <ResponseField name="subdistrict" type="string">
+      The subdistrict (kelurahan/desa)
+    </ResponseField>
+    
+    <ResponseField name="district" type="string">
+      The district (kecamatan)
+    </ResponseField>
+    
+    <ResponseField name="regency" type="string">
+      The regency or city (kabupaten/kota)
+    </ResponseField>
+    
+    <ResponseField name="province" type="string">
+      The province
+    </ResponseField>
+    
+    <ResponseField name="postal_code" type="string">
+      The postal code
+    </ResponseField>
+    
+    <ResponseField name="phone" type="string">
+      Contact phone number for this address
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET https://api.example.com/api/address \
+  -H "Authorization: Bearer <your_token>"
+```
+
+## Example Response
+
+<ResponseExample>
+```json Success Response (200)
+{
+  "statusCode": 200,
+  "message": "Success fetching addresses data",
+  "data": [
+    {
+      "id": 1,
+      "user_id": 123,
+      "address": "Jl. Sudirman No. 123",
+      "subdistrict": "Senayan",
+      "district": "Kebayoran Baru",
+      "regency": "Jakarta Selatan",
+      "province": "DKI Jakarta",
+      "postal_code": "12190",
+      "phone": "081234567890"
+    },
+    {
+      "id": 2,
+      "user_id": 123,
+      "address": "Jl. Thamrin No. 456",
+      "subdistrict": "Menteng",
+      "district": "Menteng",
+      "regency": "Jakarta Pusat",
+      "province": "DKI Jakarta",
+      "postal_code": "10310",
+      "phone": "081234567891"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Notes
+
+- This endpoint returns only addresses belonging to the authenticated user
+- Returns an empty array if the user has no saved addresses

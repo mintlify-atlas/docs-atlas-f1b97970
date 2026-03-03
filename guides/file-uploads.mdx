@@ -1,0 +1,492 @@
+---
+title: File uploads
+description: Upload images for products and user profiles
+---
+
+The E-Commerce API supports file uploads for product images and user profile photos using Multer. This guide explains how to configure and use file uploads.
+
+## Overview
+
+File uploads are handled by the `multer` middleware, which:
+- Stores files on disk in organized directories
+- Validates file types (images only)
+- Enforces file size limits (5MB maximum)
+- Generates unique filenames to prevent conflicts
+
+## Upload configuration
+
+The upload middleware is configured in `middlewares/fileUpload.mjs`:
+
+```javascript middlewares/fileUpload.mjs
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+const createDirectory = (dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+};
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const currentUrl = req.originalUrl;
+    const route = currentUrl.split('/')[3];
+    const uploadPath = path.join('uploads', route);
+
+    createDirectory(uploadPath);
+
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/jpg', 'image/bmp', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, JPG, BMP, and WEBP files are allowed.'), false);
+  }
+};
+
+export const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 1024 * 1024 * 5 }, // 5MB limit
+});
+```
+
+## Supported file types
+
+The API accepts the following image formats:
+
+- JPEG (`.jpg`, `.jpeg`)
+- PNG (`.png`)
+- GIF (`.gif`)
+- BMP (`.bmp`)
+- WebP (`.webp`)
+
+<Warning>
+  Attempting to upload other file types will result in an error: "Invalid file type. Only JPEG, PNG, GIF, JPG, BMP, and WEBP files are allowed."
+</Warning>
+
+## File size limits
+
+Maximum file size: **5MB** (5,242,880 bytes)
+
+Files exceeding this limit will be rejected with a size limit error.
+
+## Storage structure
+
+Files are automatically organized by route:
+
+```
+uploads/
+├── profile-photo/       # User profile photos
+│   ├── 1678901234567-123456789.jpg
+│   └── 1678901234568-987654321.png
+└── product/             # Product images
+    ├── 1678901234569-111111111.jpg
+    ├── 1678901234570-222222222.jpg
+    └── 1678901234571-333333333.png
+```
+
+The middleware extracts the route name from the URL path and creates subdirectories automatically.
+
+## Accessing uploaded files
+
+Uploaded files are served statically and accessible via URL:
+
+```javascript app.mjs
+app.use("/uploads", express.static("uploads"));
+```
+
+Files can be accessed at:
+```
+http://localhost:5000/uploads/profile-photo/1678901234567-123456789.jpg
+http://localhost:5000/uploads/product/1678901234569-111111111.jpg
+```
+
+## Upload examples
+
+### Single file upload - Profile photo
+
+Update a user's profile photo:
+
+**Route configuration:**
+```javascript routes/authenticateRoutes.mjs
+import { upload } from "../middlewares/fileUpload.mjs";
+import { updateProfilePhoto } from "../controllers/userController.mjs";
+import { uploadErrorHandler } from "../handler/responseHandler.mjs";
+
+router.post("/user/profile-photo", 
+  upload.single("photo"), 
+  updateProfilePhoto, 
+  uploadErrorHandler
+);
+```
+
+**Controller implementation:**
+```javascript controllers/userController.mjs
+export const updateProfilePhoto = async (req, res) => {
+  const userId = req.user.id;
+
+  if (!req.file) {
+    return errorResponse({
+      res,
+      statusCode: 400,
+      message: "photo is required",
+    });
+  }
+
+  try {
+    const imgUrl = `${req.file.destination}/${req.file.filename}`.replaceAll('\\', '/');
+
+    const [existingUser] = await db.execute(
+      "SELECT * FROM users WHERE id = ?",
+      [userId]
+    );
+    
+    if (existingUser.length === 0) {
+      return errorResponse({
+        res,
+        statusCode: 404,
+        message: "User not found",
+      });
+    }
+
+    const [result] = await db.execute(
+      "UPDATE users SET profile_photo = ? WHERE id = ?",
+      [imgUrl, userId]
+    );
+
+    successResponse({
+      res,
+      statusCode: 200,
+      message: "Profile photo updated successfully",
+      data: result,
+    });
+  } catch (error) {
+    console.error(error);
+    errorResponse({
+      res,
+      statusCode: 500,
+      message: "Internal Server Error",
+    });
+  }
+};
+```
+
+**cURL example:**
+```bash
+curl -X POST http://localhost:5000/api/user/profile-photo \
+  -H "x-api-key: your-api-key" \
+  -H "Authorization: Bearer your-jwt-token" \
+  -F "photo=@/path/to/photo.jpg"
+```
+
+**JavaScript fetch example:**
+```javascript
+const formData = new FormData();
+formData.append('photo', fileInput.files[0]);
+
+const response = await fetch('http://localhost:5000/api/user/profile-photo', {
+  method: 'POST',
+  headers: {
+    'x-api-key': 'your-api-key',
+    'Authorization': 'Bearer your-jwt-token'
+  },
+  body: formData
+});
+
+const result = await response.json();
+```
+
+### Multiple file upload - Product images
+
+Add a product with multiple images:
+
+**Route configuration:**
+```javascript routes/adminRoutes.mjs
+import { upload } from "../middlewares/fileUpload.mjs";
+import { addProduct } from "../controllers/productController.mjs";
+import { uploadErrorHandler } from "../handler/responseHandler.mjs";
+
+router.post("/product", 
+  upload.array("images"), 
+  addProduct, 
+  uploadErrorHandler
+);
+```
+
+**Controller implementation:**
+```javascript controllers/productController.mjs
+export const addProduct = async (req, res) => {
+  const { name, description, variant, price, stock, categoryId } = req.body;
+
+  if (!name || !description || !price || !stock || !categoryId) {
+    return errorResponse({
+      res,
+      statusCode: 400,
+      message: "All fields are required",
+    });
+  }
+
+  if (!req.files || req.files.length === 0) {
+    return errorResponse({
+      res,
+      statusCode: 400,
+      message: "At least one image file is required",
+    });
+  }
+
+  try {
+    const imgUrls = req.files.map((file) => file.path.replaceAll("\\", "/"));
+    const slug = name
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/&/g, "and")
+      .replace(/[^\w-]/g, "");
+      
+    const [result] = await db.execute(
+      "INSERT INTO products (name, slug, description, variant, price, stock, category_id, img_urls) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        name,
+        slug,
+        description,
+        JSON.stringify(parsedVariant),
+        price,
+        stock,
+        categoryId,
+        JSON.stringify(imgUrls),
+      ]
+    );
+
+    const [product] = await db.execute("SELECT * FROM products WHERE id = ?", [
+      result.insertId,
+    ]);
+
+    successResponse({
+      res,
+      statusCode: 201,
+      message: "Product added successfully",
+      data: {
+        ...product[0],
+        variant: JSON.parse(product[0].variant),
+        img_urls: JSON.parse(product[0].img_urls),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    errorResponse({ res, statusCode: 500, message: "Internal Server Error" });
+  }
+};
+```
+
+**cURL example:**
+```bash
+curl -X POST http://localhost:5000/api/admin/product \
+  -H "x-api-key: your-admin-api-key" \
+  -F "name=Premium Laptop" \
+  -F "description=High-performance laptop" \
+  -F "price=999.99" \
+  -F "stock=50" \
+  -F "categoryId=1" \
+  -F "images=@/path/to/image1.jpg" \
+  -F "images=@/path/to/image2.jpg" \
+  -F "images=@/path/to/image3.jpg"
+```
+
+**JavaScript fetch example:**
+```javascript
+const formData = new FormData();
+formData.append('name', 'Premium Laptop');
+formData.append('description', 'High-performance laptop');
+formData.append('price', '999.99');
+formData.append('stock', '50');
+formData.append('categoryId', '1');
+
+// Add multiple images
+for (let i = 0; i < imageFiles.length; i++) {
+  formData.append('images', imageFiles[i]);
+}
+
+const response = await fetch('http://localhost:5000/api/admin/product', {
+  method: 'POST',
+  headers: {
+    'x-api-key': 'your-admin-api-key'
+  },
+  body: formData
+});
+
+const result = await response.json();
+```
+
+## File object properties
+
+When a file is successfully uploaded, the `req.file` (single) or `req.files` (multiple) object contains:
+
+```javascript
+{
+  fieldname: 'photo',
+  originalname: 'profile.jpg',
+  encoding: '7bit',
+  mimetype: 'image/jpeg',
+  destination: 'uploads/profile-photo',
+  filename: '1678901234567-123456789.jpg',
+  path: 'uploads/profile-photo/1678901234567-123456789.jpg',
+  size: 245678
+}
+```
+
+## Error handling
+
+The API includes an upload error handler middleware:
+
+```javascript
+router.post("/user/profile-photo", 
+  upload.single("photo"), 
+  updateProfilePhoto, 
+  uploadErrorHandler  // Catches upload errors
+);
+```
+
+Common errors:
+
+<CodeGroup>
+
+```json File type error
+{
+  "error": "Invalid file type. Only JPEG, PNG, GIF, JPG, BMP, and WEBP files are allowed.",
+  "statusCode": 400
+}
+```
+
+```json File size error
+{
+  "error": "File too large",
+  "statusCode": 413
+}
+```
+
+```json Missing file error
+{
+  "error": "photo is required",
+  "statusCode": 400
+}
+```
+
+```json Missing images error
+{
+  "error": "At least one image file is required",
+  "statusCode": 400
+}
+```
+
+</CodeGroup>
+
+## Best practices
+
+<Steps>
+  <Step title="Validate on client side">
+    Check file type and size before uploading to improve user experience:
+
+    ```javascript
+    const file = input.files[0];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+    if (file.size > maxSize) {
+      alert('File too large. Maximum size is 5MB.');
+      return;
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      alert('Invalid file type. Please upload an image.');
+      return;
+    }
+    ```
+  </Step>
+
+  <Step title="Optimize images">
+    Compress images before upload to reduce bandwidth and storage:
+
+    ```javascript
+    import imageCompression from 'browser-image-compression';
+
+    const options = {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true
+    };
+
+    const compressedFile = await imageCompression(file, options);
+    ```
+  </Step>
+
+  <Step title="Show upload progress">
+    Provide feedback during upload:
+
+    ```javascript
+    const xhr = new XMLHttpRequest();
+    
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const percentComplete = (e.loaded / e.total) * 100;
+        console.log(`Upload progress: ${percentComplete}%`);
+      }
+    });
+    ```
+  </Step>
+
+  <Step title="Clean up old files">
+    Implement a cleanup strategy to remove old or unused files to save storage space.
+  </Step>
+
+  <Step title="Consider cloud storage">
+    For production, consider using cloud storage services like AWS S3, Google Cloud Storage, or Cloudinary for better scalability and CDN support.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Upload directory permissions
+
+Ensure the application has write permissions for the uploads directory:
+
+```bash
+chmod -R 755 uploads/
+```
+
+### Path separator issues
+
+The code handles Windows path separators:
+
+```javascript
+const imgUrl = `${req.file.destination}/${req.file.filename}`.replaceAll('\\', '/');
+```
+
+This ensures consistent forward slashes in URLs across all platforms.
+
+### Missing files in response
+
+If uploaded files aren't accessible, verify the static file serving is configured:
+
+```javascript app.mjs
+app.use("/uploads", express.static("uploads"));
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Products API" icon="box" href="/api/products/create">
+    Learn how to manage products with images
+  </Card>
+  <Card title="User API" icon="user" href="/api/users/upload-photo">
+    Update user profiles with photos
+  </Card>
+</CardGroup>

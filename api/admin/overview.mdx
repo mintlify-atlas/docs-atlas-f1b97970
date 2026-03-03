@@ -1,0 +1,167 @@
+---
+title: 'Admin API Overview'
+description: 'Administrative endpoints for managing categories, products, and system maintenance'
+---
+
+## Overview
+
+The Admin API provides privileged endpoints for administrative operations such as creating categories and products, generating test data, and performing system maintenance tasks. These endpoints require special authentication and should only be used by authorized administrators.
+
+<Warning>
+  Admin endpoints are protected and require a valid admin API key. These endpoints should never be exposed to regular users or client-side applications.
+</Warning>
+
+## Authentication
+
+Admin endpoints use a separate authentication mechanism from regular API endpoints. Instead of user API keys, admin operations require an admin-specific API key.
+
+### Admin API Key Header
+
+All admin requests must include the admin API key in the request headers:
+
+```bash
+X-Api-Key: your-admin-api-key
+```
+
+The admin API key is different from regular user API keys and is configured server-side via the `ADMIN_API_KEY` environment variable.
+
+### Authentication Flow
+
+1. The `adminKeyAuth` middleware validates the `x-api-key` header
+2. The provided key is compared against the server's `ADMIN_API_KEY`
+3. If invalid, the request is rejected with a 403 Forbidden status
+4. If valid, the request proceeds to the endpoint handler
+
+<Note>
+  The admin API key check is case-sensitive and must match exactly. Make sure to securely store and transmit your admin API key.
+</Note>
+
+## Available Endpoints
+
+The Admin API provides the following endpoint categories:
+
+### Content Management
+
+#### POST /api/admin/category
+
+Create a new product category with an image.
+
+- Requires multipart/form-data with an `image` field
+- Uploads and processes category image
+- Returns created category data
+
+#### POST /api/admin/product
+
+Create a new product with multiple images.
+
+- Requires multipart/form-data with an `images` field (multiple files)
+- Uploads and processes product images
+- Returns created product data
+
+### Test Data Generation
+
+#### POST /api/admin/review
+
+Generate fake review data for all products in the system.
+
+- Automatically creates realistic review data
+- Useful for testing and development environments
+- Populates reviews across all existing products
+
+<Warning>
+  This endpoint generates fake data and should only be used in development/testing environments, never in production with real customer data.
+</Warning>
+
+### System Maintenance & Migration
+
+These endpoints are used for data fixes and migrations:
+
+#### POST /api/admin/category/slug
+
+Add slugs to all existing categories that don't have them.
+
+- Automatically generates URL-friendly slugs
+- Useful for migrating legacy data
+
+#### POST /api/admin/product/slug
+
+Add slugs to all existing products that don't have them.
+
+- Automatically generates URL-friendly slugs
+- Useful for migrating legacy data
+
+#### POST /api/admin/product/fix-images
+
+Fix or update image references for all products.
+
+- Repairs broken image links
+- Updates image paths to current format
+
+#### POST /api/admin/category/fix-image
+
+Fix or update image references for all categories.
+
+- Repairs broken image links
+- Updates image paths to current format
+
+## Example Request
+
+Here's an example of creating a new category using the Admin API:
+
+```bash
+curl -X POST https://api.example.com/api/admin/category \
+  -H "X-Api-Key: your-admin-api-key" \
+  -F "name=Electronics" \
+  -F "description=Electronic devices and accessories" \
+  -F "image=@category-image.jpg"
+```
+
+### Example with JavaScript
+
+```javascript
+const formData = new FormData();
+formData.append('name', 'Electronics');
+formData.append('description', 'Electronic devices and accessories');
+formData.append('image', fileInput.files[0]);
+
+const response = await fetch('https://api.example.com/api/admin/category', {
+  method: 'POST',
+  headers: {
+    'X-Api-Key': 'your-admin-api-key'
+  },
+  body: formData
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+## Error Responses
+
+### 403 Forbidden
+
+Returned when the admin API key is invalid or missing:
+
+```json
+{
+  "success": false,
+  "message": "Invalid Admin API Key"
+}
+```
+
+<Note>
+  Always verify that your admin API key is correctly configured and included in request headers. Check for typos and ensure the header name is exactly `X-Api-Key`.
+</Note>
+
+## Security Best Practices
+
+1. **Never expose admin keys**: Keep your admin API key secret and never commit it to version control
+2. **Use environment variables**: Store the admin key in secure environment variables
+3. **Restrict network access**: Consider IP whitelisting for admin endpoints
+4. **Audit admin actions**: Log all admin API calls for security auditing
+5. **Rotate keys regularly**: Change admin API keys periodically
+6. **Use HTTPS only**: Always use encrypted connections for admin requests
+
+## Rate Limiting
+
+Admin endpoints may have different rate limiting rules than public endpoints. Contact your system administrator for specific limits applicable to your admin key.

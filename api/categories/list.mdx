@@ -1,0 +1,122 @@
+---
+title: 'List Categories'
+api: 'GET /api/category'
+description: 'Retrieve all categories from the database'
+---
+
+## Overview
+
+This endpoint retrieves all categories including their name, description, slug, and image URL. No query parameters are required.
+
+## Authentication
+
+This endpoint requires API key authentication via the `x-api-key` header.
+
+<ParamField header="x-api-key" type="string" required>
+  API key for authentication. Must match the configured API_KEY environment variable.
+</ParamField>
+
+## Response
+
+Returns a success response with an array of category objects.
+
+<ResponseField name="status" type="string">
+  Response status. Returns "OK" for successful requests.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable message describing the result.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of category objects.
+  
+  <Expandable title="Category Object">
+    <ResponseField name="id" type="integer">
+      Unique identifier for the category.
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Display name of the category.
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Detailed description of the category.
+    </ResponseField>
+    
+    <ResponseField name="slug" type="string">
+      URL-friendly slug generated from the category name.
+    </ResponseField>
+    
+    <ResponseField name="img_url" type="string">
+      Path to the category image file.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl --request GET \
+  --url https://api.example.com/api/category \
+  --header 'x-api-key: your_api_key_here'
+```
+
+## Example Response
+
+<ResponseExample>
+```json 200 - Success
+{
+  "status": "OK",
+  "message": "Success fetching categories data",
+  "data": [
+    {
+      "id": 1,
+      "name": "Electronics",
+      "description": "Electronic devices and accessories",
+      "slug": "electronics",
+      "img_url": "uploads/categories/electronics.jpg"
+    },
+    {
+      "id": 2,
+      "name": "Home & Garden",
+      "description": "Home improvement and gardening supplies",
+      "slug": "home-and-garden",
+      "img_url": "uploads/categories/home-garden.jpg"
+    }
+  ]
+}
+```
+
+```json 403 - Invalid API Key
+{
+  "status": "ERROR",
+  "message": "Invalid API Key"
+}
+```
+
+```json 500 - Server Error
+{
+  "status": "ERROR",
+  "message": "Internal Server Error"
+}
+```
+</ResponseExample>
+
+## Error Responses
+
+<ResponseField name="status" type="string">
+  Error status. Returns "ERROR" for failed requests.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message describing what went wrong.
+</ResponseField>
+
+<ResponseField name="data" type="any">
+  Additional error data if available.
+</ResponseField>
+
+## Implementation Details
+
+This endpoint is implemented in `controllers/categoryController.mjs:64` using the `getAllCategories` function. It executes a simple SELECT query to fetch all categories from the database.

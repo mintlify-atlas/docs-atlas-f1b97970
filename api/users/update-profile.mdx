@@ -1,0 +1,115 @@
+---
+title: 'Update User Profile'
+api: 'PATCH /api/user'
+---
+
+Updates the authenticated user's profile information (name and/or email).
+
+## Authentication
+
+This endpoint requires both API key and JWT authentication.
+
+### Required Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key for accessing the API
+</ParamField>
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token in the format: `Bearer <token>`
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`
+</ParamField>
+
+## Request Body
+
+At least one field must be provided for the update.
+
+<ParamField body="name" type="string" optional>
+  New name for the user
+</ParamField>
+
+<ParamField body="email" type="string" optional>
+  New email address for the user. Must be unique and not already registered.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message indicating the result of the update operation
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl --request PATCH \
+  --url https://api.example.com/api/user \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' \
+  --header 'Content-Type: application/json' \
+  --header 'x-api-key: your_api_key_here' \
+  --data '{
+    "name": "Jane Doe",
+    "email": "jane.doe@example.com"
+  }'
+```
+
+## Example Response
+
+<ResponseExample>
+```json Success Response
+{
+  "success": true,
+  "message": "User updated successfully"
+}
+```
+</ResponseExample>
+
+## Error Responses
+
+<ResponseExample>
+```json 401 Unauthorized
+{
+  "error": "Access Denied"
+}
+```
+
+```json 403 Forbidden
+{
+  "success": false,
+  "message": "Invalid API Key"
+}
+```
+
+```json 404 Not Found
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
+```json 409 Conflict
+{
+  "success": false,
+  "message": "Email already exists"
+}
+```
+
+```json 500 Internal Server Error
+{
+  "success": false,
+  "message": "Internal Server Error"
+}
+```
+</ResponseExample>
+
+## Notes
+
+- Both `name` and `email` fields are optional, but at least one must be provided
+- If updating email, the new email must not already be registered in the system
+- The update is performed atomically - either all changes succeed or none are applied

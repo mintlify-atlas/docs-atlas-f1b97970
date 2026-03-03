@@ -1,0 +1,120 @@
+---
+title: 'Delete from Cart'
+api: 'DELETE /api/cart'
+description: 'Remove a specific item from the authenticated user''s shopping cart'
+---
+
+## Authentication
+
+This endpoint requires JWT authentication.
+
+### Required Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key for authentication
+</ParamField>
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for user authentication. Format: `Bearer {token}`
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`
+</ParamField>
+
+## Request Body
+
+<ParamField body="cartId" type="integer" required>
+  The unique identifier of the cart item to remove. This is the `cart_id` returned from the GET /api/cart endpoint.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message confirming the removal or indicating an error
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE https://api.example.com/api/cart \
+  -H "x-api-key: your_api_key" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cartId": 1
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/api/cart', {
+  method: 'DELETE',
+  headers: {
+    'x-api-key': 'your_api_key',
+    'Authorization': 'Bearer your_jwt_token',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    cartId: 1
+  })
+});
+
+const data = await response.json();
+```
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+```json 200 - Success
+{
+  "success": true,
+  "message": "Product removed from cart successfully"
+}
+```
+
+```json 404 - Cart Item Not Found
+{
+  "success": false,
+  "message": "Cart not found"
+}
+```
+
+```json 401 - Unauthorized
+{
+  "success": false,
+  "message": "Unauthorized"
+}
+```
+
+```json 500 - Internal Server Error
+{
+  "success": false,
+  "message": "Internal Server Error"
+}
+```
+</CodeGroup>
+
+## Behavior Notes
+
+<Note>
+  The endpoint verifies that the cart item belongs to the authenticated user before deletion. You cannot delete items from another user's cart.
+</Note>
+
+<Warning>
+  Make sure to use the correct `cart_id` value from the GET /api/cart response. Using an invalid or non-existent cart ID will return a 404 error.
+</Warning>
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Cart item removed successfully |
+| 401 | Missing or invalid authentication credentials |
+| 404 | Cart item not found or doesn't belong to the user |
+| 500 | Internal server error |

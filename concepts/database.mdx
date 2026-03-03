@@ -1,0 +1,423 @@
+---
+title: Database schema and connection
+description: MySQL database configuration, connection pooling, and entity relationships
+---
+
+## Overview
+
+The E-Commerce API uses MySQL as its relational database, leveraging connection pooling for efficient resource management and raw SQL queries for data operations.
+
+## Database connection
+
+The database connection is configured using the `mysql2/promise` library with connection pooling:
+
+```javascript config/db.mjs
+import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const db = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+});
+
+export default db;
+```
+
+<Info>
+  Connection pooling automatically manages multiple database connections, reusing them across requests for better performance.
+</Info>
+
+## Environment variables
+
+Configure these variables in your `.env` file:
+
+<CodeGroup>
+```bash .env
+DB_HOST=localhost
+DB_USER=your_mysql_user
+DB_PASSWORD=your_mysql_password
+DB_NAME=ecommerce_db
+```
+
+```plaintext Required variables
+DB_HOST      - MySQL server hostname
+DB_USER      - Database user with access privileges
+DB_PASSWORD  - User password
+DB_NAME      - Target database name
+```
+</CodeGroup>
+
+<Warning>
+  Never commit your `.env` file to version control. Add it to `.gitignore` to prevent exposing credentials.
+</Warning>
+
+## Connection pooling
+
+The `mysql2` connection pool provides several benefits:
+
+<Accordion title="Why use connection pooling?">
+  **Performance**: Reuses existing connections instead of creating new ones for each request, reducing overhead.
+  
+  **Resource management**: Limits the number of concurrent connections to prevent overwhelming the database server.
+  
+  **Automatic cleanup**: Handles connection lifecycle, including error recovery and connection release.
+  
+  **Concurrency**: Multiple requests can share the pool, with connections automatically allocated and freed.
+</Accordion>
+
+### Using the connection pool
+
+Controllers execute queries through the pool:
+
+```javascript Example usage
+import db from "../config/db.mjs";
+
+// Execute parameterized query
+const [rows] = await db.execute(
+  "SELECT * FROM users WHERE email = ?",
+  [email]
+);
+
+// Insert data
+const [result] = await db.execute(
+  "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
+  [name, email, hashedPassword]
+);
+
+// Access insert ID
+const userId = result.insertId;
+```
+
+<Tip>
+  Always use parameterized queries (with `?` placeholders) to prevent SQL injection vulnerabilities.
+</Tip>
+
+## Database schema
+
+The application uses seven core tables representing different entities:
+
+### Entity relationships
+
+```plaintext
+users
+  ├── addresses (one-to-many)
+  ├── carts (one-to-many)
+  ├── reviews (one-to-many)
+  └── orders (one-to-many)
+
+categories
+  └── products (one-to-many)
+
+products
+  ├── reviews (one-to-many)
+  ├── carts (one-to-many)
+  └── order_items (one-to-many)
+
+orders
+  └── order_items (one-to-many)
+```
+
+### Users table
+
+Stores user account information:
+
+```sql
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  profile_photo VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+**Key fields:**
+- `id` - Unique user identifier
+- `email` - Unique email address for authentication
+- `password` - Bcrypt hashed password
+- `profile_photo` - Path to uploaded profile image
+
+<Accordion title="Example query from source">
+```javascript authController.mjs
+const [existingUser] = await db.execute(
+  "SELECT * FROM users WHERE email = ?",
+  [email]
+);
+
+if (existingUser.length > 0) {
+  return errorResponse({
+    res,
+    statusCode: 409,
+    message: "Email is already registered",
+  });
+}
+
+const hashedPassword = await bcrypt.hash(password, 10);
+
+const [result] = await db.execute(
+  "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
+  [name, email, hashedPassword]
+);
+```
+</Accordion>
+
+### Products table
+
+Stores product catalog information:
+
+```sql
+CREATE TABLE products (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) UNIQUE NOT NULL,
+  description TEXT,
+  variant JSON,
+  price DECIMAL(10, 2) NOT NULL,
+  stock INT NOT NULL,
+  category_id INT,
+  img_urls JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (category_id) REFERENCES categories(id)
+);
+```
+
+**Key fields:**
+- `slug` - URL-friendly identifier for product pages
+- `variant` - JSON array of available variants (e.g., sizes, colors)
+- `img_urls` - JSON array of product image paths
+- `category_id` - Foreign key to categories table
+
+<Accordion title="Example query from source">
+```javascript productController.mjs
+const imgUrls = req.files.map((file) => file.path.replaceAll("\\", "/"));
+const slug = name
+  .toLowerCase()
+  .replace(/\s+/g, "-")
+  .replace(/&/g, "and")
+  .replace(/[^\w-]/g, "");
+
+const [result] = await db.execute(
+  "INSERT INTO products (name, slug, description, variant, price, stock, category_id, img_urls) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  [
+    name,
+    slug,
+    description,
+    JSON.stringify(parsedVariant),
+    price,
+    stock,
+    categoryId,
+    JSON.stringify(imgUrls),
+  ]
+);
+```
+</Accordion>
+
+### Categories table
+
+Organizes products into hierarchical categories:
+
+```sql
+CREATE TABLE categories (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) UNIQUE NOT NULL,
+  image VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### Cart table
+
+Stores temporary shopping cart items:
+
+```sql
+CREATE TABLE carts (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  product_id INT NOT NULL,
+  variant VARCHAR(255),
+  quantity INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+```
+
+<Accordion title="Example query from source">
+```javascript cartController.mjs
+// Check existing cart item with variant
+const [cart] = await db.execute(
+  "SELECT * FROM carts WHERE user_id = ? AND product_id = ? AND variant = ?",
+  [userId, productId, variant]
+);
+
+if (cart.length > 0) {
+  // Update quantity if exists
+  await db.execute(
+    "UPDATE carts SET quantity = ? WHERE id = ?",
+    [quantity, cart[0].id]
+  );
+} else {
+  // Insert new cart item
+  await db.execute(
+    "INSERT INTO carts (user_id, product_id, variant, quantity) VALUES (?, ?, ?, ?)",
+    [userId, productId, variant, quantity]
+  );
+}
+```
+</Accordion>
+
+### Reviews table
+
+Stores product reviews and ratings:
+
+```sql
+CREATE TABLE reviews (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  product_id INT NOT NULL,
+  rating INT NOT NULL,
+  comment TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+```
+
+### Addresses table
+
+Stores user shipping addresses:
+
+```sql
+CREATE TABLE addresses (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  street VARCHAR(255) NOT NULL,
+  city VARCHAR(100) NOT NULL,
+  state VARCHAR(100) NOT NULL,
+  postal_code VARCHAR(20) NOT NULL,
+  country VARCHAR(100) NOT NULL,
+  is_default BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+### Orders table
+
+Stores order information:
+
+```sql
+CREATE TABLE orders (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  address_id INT NOT NULL,
+  total_amount DECIMAL(10, 2) NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (address_id) REFERENCES addresses(id)
+);
+```
+
+## Query patterns
+
+Common query patterns used throughout the application:
+
+### Parameterized queries
+
+All queries use parameterized statements for security:
+
+```javascript
+// GOOD - Parameterized query
+const [rows] = await db.execute(
+  "SELECT * FROM products WHERE category_id = ?",
+  [categoryId]
+);
+
+// BAD - String concatenation (vulnerable to SQL injection)
+const [rows] = await db.execute(
+  `SELECT * FROM products WHERE category_id = ${categoryId}`
+);
+```
+
+### JOIN queries
+
+Fetch related data across tables:
+
+```javascript productController.mjs
+const [product] = await db.execute(
+  `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+   FROM products p 
+   LEFT JOIN categories c ON p.category_id = c.id 
+   WHERE p.slug = ?`,
+  [slug]
+);
+```
+
+### Pagination queries
+
+Implement offset-based pagination:
+
+```javascript
+const offset = (page - 1) * limit;
+
+const [rows] = await db.execute(
+  `SELECT * FROM products 
+   ORDER BY created_at DESC 
+   LIMIT ? OFFSET ?`,
+  [parseInt(limit), parseInt(offset)]
+);
+```
+
+<Note>
+  Always parse pagination parameters as integers to prevent SQL errors.
+</Note>
+
+## JSON fields
+
+Several tables use JSON columns for flexible data storage:
+
+```javascript
+// Storing JSON
+await db.execute(
+  "INSERT INTO products (img_urls, variant) VALUES (?, ?)",
+  [JSON.stringify(imageArray), JSON.stringify(variantArray)]
+);
+
+// Retrieving and parsing JSON
+const [product] = await db.execute("SELECT * FROM products WHERE id = ?", [id]);
+const imageUrls = JSON.parse(product[0].img_urls);
+const variants = JSON.parse(product[0].variant);
+```
+
+<Tip>
+  Always handle potential parsing errors when reading JSON fields, especially if the field might be NULL or empty.
+</Tip>
+
+## Connection testing
+
+Verify database connectivity on application startup:
+
+```javascript app.mjs
+(async () => {
+  try {
+    await db.getConnection();
+    console.log("Connected to MySQL database.");
+  } catch (err) {
+    console.error("Database connection failed:", err);
+  }
+})();
+```
+
+This IIFE (Immediately Invoked Function Expression) runs when the application starts, confirming the database is accessible.

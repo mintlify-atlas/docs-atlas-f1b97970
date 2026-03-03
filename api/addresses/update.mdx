@@ -1,0 +1,102 @@
+---
+title: 'Update Address'
+api: 'PATCH /api/address'
+description: 'Update an existing address for the authenticated user'
+---
+
+## Authentication
+
+This endpoint requires JWT authentication. Include your bearer token in the Authorization header.
+
+```bash
+Authorization: Bearer <your_token>
+```
+
+## Request Body
+
+<ParamField body="addressId" type="number" required>
+  The ID of the address to update. Must belong to the authenticated user.
+</ParamField>
+
+<ParamField body="address" type="string">
+  The street address
+</ParamField>
+
+<ParamField body="subdistrict" type="string">
+  The subdistrict (kelurahan/desa)
+</ParamField>
+
+<ParamField body="district" type="string">
+  The district (kecamatan)
+</ParamField>
+
+<ParamField body="regency" type="string">
+  The regency or city (kabupaten/kota)
+</ParamField>
+
+<ParamField body="province" type="string">
+  The province
+</ParamField>
+
+<ParamField body="postalCode" type="string">
+  The postal code
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Contact phone number for this address
+</ParamField>
+
+## Response
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code of the response
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X PATCH https://api.example.com/api/address \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "addressId": 1,
+    "address": "Jl. Sudirman No. 456",
+    "phone": "081234567899"
+  }'
+```
+
+## Example Response
+
+<ResponseExample>
+```json Success Response (200)
+{
+  "statusCode": 200,
+  "message": "Address updated successfully"
+}
+```
+
+```json Error Response (400 - Missing Address ID)
+{
+  "statusCode": 400,
+  "message": "Address ID is required"
+}
+```
+
+```json Error Response (404 - Address Not Found)
+{
+  "statusCode": 404,
+  "message": "Address not found"
+}
+```
+</ResponseExample>
+
+## Notes
+
+- Only the address owner can update their own addresses
+- All fields except `addressId` are optional - only provide fields you want to update
+- The endpoint performs a partial update, preserving fields not included in the request
+- If the address doesn't exist or doesn't belong to the user, a 404 error is returned

@@ -1,0 +1,119 @@
+---
+title: 'Get User Profile'
+api: 'GET /api/user'
+---
+
+Retrieves the authenticated user's profile information.
+
+## Authentication
+
+This endpoint requires both API key and JWT authentication.
+
+### Required Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key for accessing the API
+</ParamField>
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token in the format: `Bearer <token>`
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  User profile data
+  
+  <Expandable title="data properties">
+    <ResponseField name="id" type="integer">
+      User's unique identifier
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      User's full name
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      User's email address
+    </ResponseField>
+    
+    <ResponseField name="profile_photo" type="string" optional>
+      URL to user's profile photo
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="datetime">
+      Account creation timestamp
+    </ResponseField>
+    
+    <ResponseField name="updated_at" type="datetime">
+      Last update timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl --request GET \
+  --url https://api.example.com/api/user \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' \
+  --header 'x-api-key: your_api_key_here'
+```
+
+## Example Response
+
+<ResponseExample>
+```json Success Response
+{
+  "success": true,
+  "message": "Success fetching user data",
+  "data": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "profile_photo": "uploads/profile-photo/1234567890-123456789.jpg",
+    "created_at": "2024-01-15T10:30:00.000Z",
+    "updated_at": "2024-02-20T14:45:00.000Z"
+  }
+}
+```
+</ResponseExample>
+
+## Error Responses
+
+<ResponseExample>
+```json 401 Unauthorized
+{
+  "error": "Access Denied"
+}
+```
+
+```json 403 Forbidden
+{
+  "success": false,
+  "message": "Invalid API Key"
+}
+```
+
+```json 404 Not Found
+{
+  "success": false,
+  "message": "User not found"
+}
+```
+
+```json 500 Internal Server Error
+{
+  "success": false,
+  "message": "Internal Server Error"
+}
+```
+</ResponseExample>

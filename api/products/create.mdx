@@ -1,0 +1,195 @@
+---
+title: 'Create Product'
+api: 'POST /api/admin/product'
+description: 'Create a new product with images (Admin only)'
+---
+
+## Authentication
+
+This endpoint requires admin authentication. You must be logged in as an admin user.
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for admin authentication
+</ParamField>
+
+## Request Body
+
+This endpoint accepts `multipart/form-data` to support file uploads.
+
+<ParamField body="name" type="string" required>
+  Product name
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  Product description
+</ParamField>
+
+<ParamField body="price" type="number" required>
+  Product price
+</ParamField>
+
+<ParamField body="stock" type="integer" required>
+  Available stock quantity
+</ParamField>
+
+<ParamField body="categoryId" type="integer" required>
+  Category ID to which this product belongs
+</ParamField>
+
+<ParamField body="variant" type="string">
+  JSON string array of product variants (e.g., `["S", "M", "L", "XL"]` or `["Red", "Blue", "Green"]`)
+</ParamField>
+
+<ParamField body="images" type="file[]" required>
+  Product images (multiple files supported). At least one image is required. Accepts common image formats (JPEG, PNG, etc.)
+</ParamField>
+
+## Response
+
+<ResponseField name="statusCode" type="integer">
+  HTTP status code (201 for success)
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The newly created product object
+  
+  <Expandable title="Product Object">
+    <ResponseField name="id" type="integer">
+      Product ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Product name
+    </ResponseField>
+    
+    <ResponseField name="slug" type="string">
+      Auto-generated URL-friendly identifier
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Product description
+    </ResponseField>
+    
+    <ResponseField name="variant" type="array">
+      Array of product variants
+    </ResponseField>
+    
+    <ResponseField name="price" type="number">
+      Product price
+    </ResponseField>
+    
+    <ResponseField name="stock" type="integer">
+      Available stock quantity
+    </ResponseField>
+    
+    <ResponseField name="category_id" type="integer">
+      Category ID
+    </ResponseField>
+    
+    <ResponseField name="category_name" type="string">
+      Category name
+    </ResponseField>
+    
+    <ResponseField name="img_urls" type="array">
+      Array of uploaded product image URLs
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      Product creation timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl --request POST \
+  --url 'https://api.example.com/api/admin/product' \
+  --header 'Authorization: Bearer your_admin_token_here' \
+  --header 'Content-Type: multipart/form-data' \
+  --form 'name=Premium Leather Jacket' \
+  --form 'description=High-quality leather jacket with modern design' \
+  --form 'price=199.99' \
+  --form 'stock=50' \
+  --form 'categoryId=3' \
+  --form 'variant=["S","M","L","XL"]' \
+  --form 'images=@/path/to/image1.jpg' \
+  --form 'images=@/path/to/image2.jpg' \
+  --form 'images=@/path/to/image3.jpg'
+```
+
+## Example Response
+
+```json
+{
+  "statusCode": 201,
+  "message": "Product added successfully",
+  "data": {
+    "id": 42,
+    "name": "Premium Leather Jacket",
+    "slug": "premium-leather-jacket",
+    "description": "High-quality leather jacket with modern design",
+    "variant": ["S", "M", "L", "XL"],
+    "price": 199.99,
+    "stock": 50,
+    "category_id": 3,
+    "category_name": "Outerwear",
+    "img_urls": [
+      "uploads/products/1234567890-image1.jpg",
+      "uploads/products/1234567891-image2.jpg",
+      "uploads/products/1234567892-image3.jpg"
+    ],
+    "created_at": "2026-03-03T10:30:00.000Z"
+  }
+}
+```
+
+## Error Responses
+
+### Missing Required Fields
+
+```json
+{
+  "statusCode": 400,
+  "message": "All fields are required"
+}
+```
+
+### Missing Images
+
+```json
+{
+  "statusCode": 400,
+  "message": "At least one image file is required"
+}
+```
+
+### Invalid Variant Format
+
+```json
+{
+  "statusCode": 400,
+  "message": "Invalid format for variants. Must be a JSON array."
+}
+```
+
+### Product Already Exists
+
+```json
+{
+  "statusCode": 409,
+  "message": "Product already exists"
+}
+```
+
+## Notes
+
+- The `slug` is automatically generated from the product name by converting to lowercase, replacing spaces with hyphens, and removing special characters
+- Product names must be unique - you cannot create two products with the same name
+- The `variant` field should be a JSON string representation of an array
+- Multiple images can be uploaded simultaneously using the `images` field
+- Image paths are automatically normalized to use forward slashes

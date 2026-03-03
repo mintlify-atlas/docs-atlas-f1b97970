@@ -1,0 +1,188 @@
+---
+title: 'Get Product Details'
+api: 'GET /api/product/:slug'
+description: 'Retrieve detailed information about a specific product including reviews'
+---
+
+## Authentication
+
+This endpoint requires an API key to be passed in the header.
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key for authentication
+</ParamField>
+
+## Path Parameters
+
+<ParamField path="slug" type="string" required>
+  The URL-friendly product identifier (e.g., "classic-cotton-shirt")
+</ParamField>
+
+## Response
+
+<ResponseField name="statusCode" type="integer">
+  HTTP status code (200 for success, 404 if product not found)
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Detailed product information
+  
+  <Expandable title="Product Details">
+    <ResponseField name="id" type="integer">
+      Product ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Product name
+    </ResponseField>
+    
+    <ResponseField name="slug" type="string">
+      URL-friendly product identifier
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Product description
+    </ResponseField>
+    
+    <ResponseField name="variant" type="array">
+      Array of product variants (e.g., sizes, colors)
+    </ResponseField>
+    
+    <ResponseField name="price" type="number">
+      Product price
+    </ResponseField>
+    
+    <ResponseField name="stock" type="integer">
+      Available stock quantity
+    </ResponseField>
+    
+    <ResponseField name="category_id" type="integer">
+      Category ID
+    </ResponseField>
+    
+    <ResponseField name="category_name" type="string">
+      Category name
+    </ResponseField>
+    
+    <ResponseField name="category_slug" type="string">
+      Category slug
+    </ResponseField>
+    
+    <ResponseField name="img_urls" type="array">
+      Array of product image URLs
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      Product creation timestamp
+    </ResponseField>
+    
+    <ResponseField name="total_reviews" type="integer">
+      Total number of reviews for this product
+    </ResponseField>
+    
+    <ResponseField name="reviews" type="array">
+      Array of product reviews
+      
+      <Expandable title="Review Object">
+        <ResponseField name="id" type="integer">
+          Review ID
+        </ResponseField>
+        
+        <ResponseField name="product_id" type="integer">
+          Product ID
+        </ResponseField>
+        
+        <ResponseField name="user_id" type="integer">
+          User ID who wrote the review
+        </ResponseField>
+        
+        <ResponseField name="user_name" type="string">
+          Name of the user who wrote the review
+        </ResponseField>
+        
+        <ResponseField name="rating" type="integer">
+          Review rating (typically 1-5)
+        </ResponseField>
+        
+        <ResponseField name="comment" type="string">
+          Review comment text
+        </ResponseField>
+        
+        <ResponseField name="created_at" type="string">
+          Review creation timestamp
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl --request GET \
+  --url 'https://api.example.com/api/product/classic-cotton-shirt' \
+  --header 'x-api-key: your_api_key_here'
+```
+
+## Example Response
+
+```json
+{
+  "statusCode": 200,
+  "message": "Product details fetched successfully",
+  "data": {
+    "id": 1,
+    "name": "Classic Cotton Shirt",
+    "slug": "classic-cotton-shirt",
+    "description": "A comfortable cotton shirt perfect for everyday wear. Made from 100% organic cotton with breathable fabric and modern fit.",
+    "variant": ["S", "M", "L", "XL"],
+    "price": 29.99,
+    "stock": 150,
+    "category_id": 1,
+    "category_name": "Men's Clothing",
+    "category_slug": "mens-clothing",
+    "img_urls": [
+      "uploads/products/shirt-1.jpg",
+      "uploads/products/shirt-2.jpg",
+      "uploads/products/shirt-3.jpg"
+    ],
+    "created_at": "2026-01-15T10:30:00.000Z",
+    "total_reviews": 2,
+    "reviews": [
+      {
+        "id": 5,
+        "product_id": 1,
+        "user_id": 12,
+        "user_name": "John Doe",
+        "rating": 5,
+        "comment": "Great quality shirt! Very comfortable and fits perfectly.",
+        "created_at": "2026-02-01T14:20:00.000Z"
+      },
+      {
+        "id": 3,
+        "product_id": 1,
+        "user_id": 8,
+        "user_name": "Jane Smith",
+        "rating": 4,
+        "comment": "Good value for money. The fabric is nice and soft.",
+        "created_at": "2026-01-28T09:15:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+## Error Response
+
+If the product is not found:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Product not found"
+}
+```

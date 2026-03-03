@@ -1,0 +1,162 @@
+---
+title: 'Add to Cart'
+api: 'POST /api/cart'
+description: 'Add a product to the authenticated user''s shopping cart or update quantity if already exists'
+---
+
+## Authentication
+
+This endpoint requires JWT authentication.
+
+### Required Headers
+
+<ParamField header="x-api-key" type="string" required>
+  Your API key for authentication
+</ParamField>
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for user authentication. Format: `Bearer {token}`
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`
+</ParamField>
+
+## Request Body
+
+<ParamField body="productId" type="integer" required>
+  The ID of the product to add to cart
+</ParamField>
+
+<ParamField body="quantity" type="integer" required>
+  The quantity of the product to add. Must be a positive integer.
+</ParamField>
+
+<ParamField body="variant" type="string">
+  The product variant (e.g., color, size). Required if the product has variants available.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Response message indicating whether the product was added or quantity was updated
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.example.com/api/cart \
+  -H "x-api-key: your_api_key" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "productId": 123,
+    "quantity": 2,
+    "variant": "Black"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/api/cart', {
+  method: 'POST',
+  headers: {
+    'x-api-key': 'your_api_key',
+    'Authorization': 'Bearer your_jwt_token',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    productId: 123,
+    quantity: 2,
+    variant: 'Black'
+  })
+});
+
+const data = await response.json();
+```
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+```json 201 - Product Added
+{
+  "success": true,
+  "message": "Product added to cart successfully"
+}
+```
+
+```json 200 - Quantity Updated
+{
+  "success": true,
+  "message": "Product quantity updated in cart successfully"
+}
+```
+
+```json 400 - Missing Required Fields
+{
+  "success": false,
+  "message": "productId and quantity are required"
+}
+```
+
+```json 400 - Variant Required
+{
+  "success": false,
+  "message": "variant is required"
+}
+```
+
+```json 400 - Invalid Variant
+{
+  "success": false,
+  "message": "Invalid variant"
+}
+```
+
+```json 404 - Product Not Found
+{
+  "success": false,
+  "message": "Product not found"
+}
+```
+
+```json 401 - Unauthorized
+{
+  "success": false,
+  "message": "Unauthorized"
+}
+```
+
+```json 500 - Internal Server Error
+{
+  "success": false,
+  "message": "Internal Server Error"
+}
+```
+</CodeGroup>
+
+## Behavior Notes
+
+<Note>
+  If the same product with the same variant already exists in the cart, the quantity will be **updated** to the new value (not incremented). The response will return a 200 status code with the message "Product quantity updated in cart successfully".
+</Note>
+
+<Warning>
+  For products that have variants, the `variant` field is **required**. The variant value must match one of the available variants for the product, otherwise a 400 error will be returned.
+</Warning>
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Product quantity updated successfully |
+| 201 | Product added to cart successfully |
+| 400 | Missing required fields or invalid variant |
+| 401 | Missing or invalid authentication credentials |
+| 404 | Product not found |
+| 500 | Internal server error |

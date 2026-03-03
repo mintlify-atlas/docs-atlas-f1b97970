@@ -1,0 +1,254 @@
+---
+title: Rate limiting
+description: Protect your API with rate limiting and IP blocking
+---
+
+The E-Commerce API includes built-in rate limiting to protect against abuse and ensure fair usage. This guide explains how rate limiting works and how to configure it.
+
+## Overview
+
+Rate limiting is implemented using the `express-rate-limit` package and is automatically applied to all incoming requests through the logging middleware.
+
+## Default configuration
+
+The API uses the following default rate limit settings:
+
+```javascript middlewares/logMiddleware.mjs
+import rateLimit from "express-rate-limit";
+
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000,  // 1 minute
+  max: 100,                  // 100 requests per window
+  handler: (req, res) => errorResponse({ 
+    res, 
+    statusCode: 429, 
+    message: "Too many requests" 
+  }),
+});
+```
+
+### Configuration parameters
+
+- **windowMs**: Time window in milliseconds (default: 1 minute)
+- **max**: Maximum number of requests per window (default: 100 requests)
+- **handler**: Custom error handler that returns a 429 status code
+
+<Info>
+  With the default settings, each IP address can make up to 100 requests per minute. Exceeding this limit results in a 429 Too Many Requests error.
+</Info>
+
+## How it works
+
+The rate limiter is applied through the log middleware:
+
+```javascript middlewares/logMiddleware.mjs
+export const logMiddleware = (req, res, next) => {
+  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  const timestamp = new Date().toISOString();
+
+  const blockedList = blockedIps;
+  
+  res.on("finish", () => {
+    const statusCode = res.statusCode;
+    const logMessage = `${timestamp} - ${req.method} ${req.originalUrl} - IP: ${ip} - Status: ${statusCode} - ${res.statusMessage} - User-Agent: ${req.headers["user-agent"]} - Query: ${JSON.stringify(req.query)} - Body: ${JSON.stringify(req.body)}\n`;
+    console.log(logMessage);
+    logStream.write(logMessage);
+  });
+  
+  if (blockedList.includes(ip)) {
+    return errorResponse({ res, statusCode: 403, message: "IP is blocked" });
+  }
+  
+  limiter(req, res, next);
+};
+```
+
+The middleware:
+1. Logs all incoming requests with IP, timestamp, and request details
+2. Checks if the IP is in the blocked list
+3. Applies rate limiting before passing to the next middleware
+
+## Rate limit headers
+
+When rate limiting is active, the API includes these response headers:
+
+```bash
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1678901234
+```
+
+- **X-RateLimit-Limit**: Total number of requests allowed per window
+- **X-RateLimit-Remaining**: Number of requests remaining in current window
+- **X-RateLimit-Reset**: Timestamp when the rate limit window resets
+
+## Error response
+
+When a client exceeds the rate limit, they receive a 429 status code:
+
+```json
+{
+  "error": "Too many requests",
+  "statusCode": 429
+}
+```
+
+## Customizing rate limits
+
+You can customize the rate limit settings by modifying the configuration in `middlewares/logMiddleware.mjs`:
+
+### Increase the time window
+
+```javascript
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 1000,                  // 1000 requests per 15 minutes
+  handler: (req, res) => errorResponse({ 
+    res, 
+    statusCode: 429, 
+    message: "Too many requests" 
+  }),
+});
+```
+
+### Add different limits for different routes
+
+```javascript
+// Stricter limit for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 5,                     // 5 requests per 15 minutes
+  message: "Too many authentication attempts",
+});
+
+// Apply to specific routes
+app.use("/api/auth/login", authLimiter);
+```
+
+### Skip rate limiting for specific IPs
+
+```javascript
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 100,
+  skip: (req) => {
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    const whitelistedIps = ["192.168.1.1", "10.0.0.1"];
+    return whitelistedIps.includes(ip);
+  },
+  handler: (req, res) => errorResponse({ 
+    res, 
+    statusCode: 429, 
+    message: "Too many requests" 
+  }),
+});
+```
+
+## IP blocking
+
+In addition to rate limiting, the API supports permanent IP blocking through a blocklist:
+
+```javascript config/blockedIps.mjs
+export const blockedIps = [
+  // Add IPs to block
+  // "192.168.1.100",
+  // "10.0.0.50",
+];
+```
+
+Blocked IPs receive a 403 Forbidden response:
+
+```json
+{
+  "error": "IP is blocked",
+  "statusCode": 403
+}
+```
+
+<Warning>
+  IP blocking is checked before rate limiting. Blocked IPs cannot access the API at all, regardless of request count.
+</Warning>
+
+## Request logging
+
+All requests are logged to `logs/requests.log` with the following information:
+
+```
+2026-03-03T10:30:45.123Z - GET /api/products - IP: 192.168.1.1 - Status: 200 - OK - User-Agent: Mozilla/5.0... - Query: {"page":"1"} - Body: {}
+```
+
+This log includes:
+- Timestamp
+- HTTP method and URL
+- Client IP address
+- Response status code
+- User agent
+- Query parameters
+- Request body
+
+<Info>
+  Logs are appended to the file and persist across server restarts. Consider implementing log rotation for production environments.
+</Info>
+
+## Best practices
+
+<Steps>
+  <Step title="Set appropriate limits">
+    Configure rate limits based on your API's expected usage patterns. Too strict may frustrate legitimate users, too lenient may not provide adequate protection.
+  </Step>
+
+  <Step title="Monitor logs">
+    Regularly review `logs/requests.log` to identify abuse patterns or legitimate users hitting rate limits.
+  </Step>
+
+  <Step title="Use different limits per route">
+    Apply stricter limits to sensitive endpoints like authentication and looser limits for read-only endpoints.
+  </Step>
+
+  <Step title="Implement retry logic">
+    If you're building a client, implement exponential backoff when receiving 429 responses.
+  </Step>
+
+  <Step title="Consider Redis for scaling">
+    The default memory store works for single-server deployments. For multiple servers, use Redis as a shared store:
+
+    ```javascript
+    import RedisStore from 'rate-limit-redis';
+    import { createClient } from 'redis';
+
+    const client = createClient();
+    await client.connect();
+
+    const limiter = rateLimit({
+      store: new RedisStore({ client }),
+      windowMs: 1 * 60 * 1000,
+      max: 100,
+    });
+    ```
+  </Step>
+</Steps>
+
+## Testing rate limits
+
+You can test rate limiting with a simple script:
+
+```bash
+# Send 101 requests quickly
+for i in {1..101}; do
+  curl -H "x-api-key: your-api-key" http://localhost:5000/api/products
+  echo "Request $i"
+done
+```
+
+The 101st request should return a 429 error.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="File uploads" icon="upload" href="/guides/file-uploads">
+    Learn how to handle file uploads
+  </Card>
+  <Card title="Authentication" icon="shield" href="/authentication">
+    Understand API authentication
+  </Card>
+</CardGroup>

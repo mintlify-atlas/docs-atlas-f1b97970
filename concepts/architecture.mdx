@@ -1,0 +1,276 @@
+---
+title: Application architecture
+description: Understanding the layered architecture and request flow of the E-Commerce API
+---
+
+## Overview
+
+The E-Commerce API follows a classic three-tier architecture pattern with Express.js, organizing code into distinct layers that separate concerns and promote maintainability.
+
+## Layered architecture
+
+The application is structured in three primary layers:
+
+<Steps>
+  <Step title="Routes layer">
+    Defines API endpoints and maps HTTP requests to controller functions. Routes are organized by access level (public, authenticated, admin).
+  </Step>
+  
+  <Step title="Controllers layer">
+    Contains business logic and handles request processing. Controllers interact with the database and return formatted responses.
+  </Step>
+  
+  <Step title="Database layer">
+    Manages data persistence using MySQL connection pooling. Raw SQL queries are executed through the database connection pool.
+  </Step>
+</Steps>
+
+## Application structure
+
+The Express application is initialized in `app.mjs` with a carefully ordered middleware stack:
+
+```javascript app.mjs
+import express from "express";
+import db from "./config/db.mjs";
+import { adminKeyAuth } from "./middlewares/adminMiddleware.mjs";
+import { apiKeyAuth, authenticate } from "./middlewares/authMiddleware.mjs";
+import publicRoutes from "./routes/publicRoutes.mjs";
+import adminRoutes from "./routes/adminRoutes.mjs";
+import authenticateRoutes from "./routes/authenticateRoutes.mjs";
+import { logMiddleware } from "./middlewares/logMiddleware.mjs";
+import cors from "cors";
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware stack (order matters!)
+app.use(logMiddleware);           // Logging and rate limiting
+app.use(cors());                  // CORS headers
+app.use("/uploads", express.static("uploads")); // Static files
+app.use(express.json());          // JSON body parsing
+
+// Route mounting with middleware chains
+app.use("/api/admin", adminKeyAuth, adminRoutes);
+app.use("/api", apiKeyAuth, publicRoutes);
+app.use("/api", apiKeyAuth, authenticate, authenticateRoutes);
+```
+
+<Note>
+  The order of middleware is critical. Global middleware like `logMiddleware` and `cors()` are applied first, followed by route-specific middleware chains.
+</Note>
+
+## Routing structure
+
+The API organizes routes into three distinct groups based on authentication requirements:
+
+### Public routes
+
+Accessible with only an API key (`x-api-key` header):
+
+<CodeGroup>
+```javascript publicRoutes.mjs
+import { Router } from "express";
+import { register, login } from "../controllers/authController.mjs";
+import { getAllCategories } from "../controllers/categoryController.mjs";
+import { getAllProducts, getProductDetails } from "../controllers/productController.mjs";
+
+const router = Router();
+
+router.post("/register", register);
+router.post("/login", login);
+router.get("/category", getAllCategories);
+router.get("/product", getAllProducts);
+router.get("/product/:slug", getProductDetails);
+
+export default router;
+```
+
+```plaintext Endpoints
+POST   /api/register
+POST   /api/login
+GET    /api/category
+GET    /api/product
+GET    /api/product/:slug
+```
+</CodeGroup>
+
+### Authenticated routes
+
+Require both API key and JWT authentication token:
+
+```javascript authenticateRoutes.mjs
+import { Router } from "express";
+import { getUser } from "../controllers/authController.mjs";
+import { addReview } from "../controllers/reviewController.mjs";
+import { addCart, deleteCart, getCart } from "../controllers/cartController.mjs";
+import { addAddress, deleteAddress, getAddresses, updateAddress } from "../controllers/addressController.mjs";
+import { updateNameEmail, updatePassword, updateProfilePhoto } from "../controllers/userController.mjs";
+
+const router = Router();
+
+router.get("/user", getUser);
+router.patch("/user", updateNameEmail);
+router.patch("/user/password", updatePassword);
+router.post("/user/profile-photo", upload.single("photo"), updateProfilePhoto);
+router.post("/review", addReview);
+router.post("/cart", addCart);
+router.get("/cart", getCart);
+router.delete("/cart", deleteCart);
+router.post("/address", addAddress);
+router.get("/address", getAddresses);
+
+export default router;
+```
+
+### Admin routes
+
+Require admin API key (`ADMIN_API_KEY`):
+
+```javascript adminRoutes.mjs
+import { Router } from "express";
+import { addCategory } from "../controllers/categoryController.mjs";
+import { upload } from "../middlewares/fileUpload.mjs";
+import { uploadErrorHandler } from "../handler/responseHandler.mjs";
+import { addProduct } from "../controllers/productController.mjs";
+import { generateFakeReviewsForAllProducts } from "../controllers/reviewController.mjs";
+
+const router = Router();
+
+router.post("/category", upload.single("image"), addCategory, uploadErrorHandler);
+router.post("/product", upload.array("images"), addProduct, uploadErrorHandler);
+router.post("/review", generateFakeReviewsForAllProducts);
+
+export default router;
+```
+
+## Request flow
+
+Every request follows this execution path:
+
+<Steps>
+  <Step title="Log middleware">
+    Request is logged with timestamp, IP address, user agent, and query/body parameters. Rate limiting is applied (100 requests per minute). Blocked IPs are rejected.
+    
+    See [log middleware](/concepts/middleware#log-middleware) for details.
+  </Step>
+  
+  <Step title="CORS middleware">
+    Cross-Origin Resource Sharing headers are added to enable browser-based API consumption.
+  </Step>
+  
+  <Step title="JSON body parser">
+    Request body is parsed from JSON format into JavaScript objects accessible via `req.body`.
+  </Step>
+  
+  <Step title="Route-specific middleware">
+    Depending on the route prefix, authentication middleware is applied:
+    
+    - `/api/admin/*` - Admin API key validation
+    - `/api/*` (public) - Standard API key validation
+    - `/api/*` (authenticated) - API key + JWT token validation
+  </Step>
+  
+  <Step title="Controller execution">
+    The matched route handler (controller function) executes business logic, interacts with the database, and returns a response.
+  </Step>
+  
+  <Step title="Response sent">
+    Standardized JSON response is returned with status code, message, and optional data payload.
+  </Step>
+</Steps>
+
+<Info>
+  All responses use standardized format via `successResponse()` and `errorResponse()` helper functions for consistency.
+</Info>
+
+## Controller pattern
+
+Controllers handle business logic and follow a consistent pattern:
+
+```javascript controllers/productController.mjs
+import db from "../config/db.mjs";
+import { errorResponse, successResponse } from "../handler/responseHandler.mjs";
+
+export const getProductDetails = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    // Get product details with JOIN
+    const [product] = await db.execute(
+      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+       FROM products p 
+       LEFT JOIN categories c ON p.category_id = c.id 
+       WHERE p.slug = ?`,
+      [slug]
+    );
+
+    if (product.length === 0) {
+      return errorResponse({
+        res,
+        statusCode: 404,
+        message: "Product not found",
+      });
+    }
+
+    // Parse JSON fields
+    const productData = {
+      ...product[0],
+      variant: JSON.parse(product[0].variant || "[]"),
+      img_urls: JSON.parse(product[0].img_urls || "[]"),
+    };
+
+    // Fetch related reviews
+    const [reviews] = await db.execute(
+      "SELECT r.*, u.name AS user_name FROM reviews r LEFT JOIN users u ON r.user_id = u.id WHERE product_id = ?",
+      [productData.id]
+    );
+
+    successResponse({
+      res,
+      statusCode: 200,
+      message: "Product details fetched successfully",
+      data: { ...productData, reviews },
+    });
+  } catch (error) {
+    console.error(error);
+    errorResponse({ res, statusCode: 500, message: "Internal Server Error" });
+  }
+};
+```
+
+<Tip>
+  Controllers use async/await for database operations and always wrap logic in try/catch blocks for error handling.
+</Tip>
+
+## Database initialization
+
+The application establishes a database connection on startup:
+
+```javascript app.mjs
+(async () => {
+  try {
+    await db.getConnection();
+    console.log("Connected to MySQL database.");
+  } catch (err) {
+    console.error("Database connection failed:", err);
+  }
+})();
+```
+
+<Warning>
+  If the database connection fails, the application will still start but API requests will fail. Ensure your database is running and environment variables are configured correctly.
+</Warning>
+
+## API documentation
+
+Swagger/OpenAPI documentation is automatically served:
+
+```javascript app.mjs
+import swaggerUi from "swagger-ui-express";
+import { swaggerDocs, swaggerUiOptions } from "./docs/swaggerDef.mjs";
+
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs, swaggerUiOptions));
+console.log(`API Docs available at http://localhost:${PORT}/docs`);
+```
+
+Interactive API documentation is available at `/docs` endpoint when the server is running.
