@@ -98,7 +98,7 @@ const userId = result.insertId;
 
 ## Database schema
 
-The application uses seven core tables representing different entities:
+The application uses six core tables representing different entities:
 
 ### Entity relationships
 
@@ -106,19 +106,14 @@ The application uses seven core tables representing different entities:
 users
   ├── addresses (one-to-many)
   ├── carts (one-to-many)
-  ├── reviews (one-to-many)
-  └── orders (one-to-many)
+  └── reviews (one-to-many)
 
 categories
   └── products (one-to-many)
 
 products
   ├── reviews (one-to-many)
-  ├── carts (one-to-many)
-  └── order_items (one-to-many)
-
-orders
-  └── order_items (one-to-many)
+  └── carts (one-to-many)
 ```
 
 ### Users table
@@ -309,24 +304,6 @@ CREATE TABLE addresses (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-```
-
-### Orders table
-
-Stores order information:
-
-```sql
-CREATE TABLE orders (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  user_id INT NOT NULL,
-  address_id INT NOT NULL,
-  total_amount DECIMAL(10, 2) NOT NULL,
-  status VARCHAR(50) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (address_id) REFERENCES addresses(id)
 );
 ```
 
