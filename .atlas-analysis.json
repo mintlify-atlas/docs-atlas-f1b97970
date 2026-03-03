@@ -1,0 +1,147 @@
+{
+  "projectType": "api-service",
+  "projectName": "E-Commerce API Demo",
+  "projectDescription": "A demonstration RESTful API for e-commerce applications built with Express.js, featuring product management, user authentication, shopping cart, and order processing.",
+  "theme": "sequoia",
+  "primaryColor": "#5F95FF",
+  "lightColor": "#C98FFF",
+  "darkColor": "#000B51",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/database",
+              "concepts/middleware"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/setup",
+              "guides/configuration",
+              "guides/rate-limiting",
+              "guides/file-uploads"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/register",
+              "api/auth/login"
+            ]
+          },
+          {
+            "group": "Users",
+            "pages": [
+              "api/users/get-profile",
+              "api/users/update-profile",
+              "api/users/update-password",
+              "api/users/upload-photo"
+            ]
+          },
+          {
+            "group": "Categories",
+            "pages": [
+              "api/categories/list",
+              "api/categories/create"
+            ]
+          },
+          {
+            "group": "Products",
+            "pages": [
+              "api/products/list",
+              "api/products/get-details",
+              "api/products/create"
+            ]
+          },
+          {
+            "group": "Cart",
+            "pages": [
+              "api/cart/get",
+              "api/cart/add",
+              "api/cart/delete"
+            ]
+          },
+          {
+            "group": "Reviews",
+            "pages": [
+              "api/reviews/create"
+            ]
+          },
+          {
+            "group": "Addresses",
+            "pages": [
+              "api/addresses/list",
+              "api/addresses/create",
+              "api/addresses/update",
+              "api/addresses/delete"
+            ]
+          },
+          {
+            "group": "Admin",
+            "pages": [
+              "api/admin/overview"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "JWT-based authentication with bcrypt password hashing",
+    "API key authentication for public endpoints",
+    "RESTful API design with Express.js",
+    "MySQL database integration with connection pooling",
+    "Rate limiting for API protection",
+    "File upload support with Multer for product images and profile photos",
+    "Shopping cart and order management",
+    "Product reviews and ratings",
+    "User address management",
+    "OpenAPI/Swagger documentation"
+  ],
+  "publicApiSurface": [
+    "POST /api/register - User registration",
+    "POST /api/login - User login",
+    "GET /api/user - Get user profile",
+    "PATCH /api/user - Update user profile",
+    "PATCH /api/user/password - Update password",
+    "POST /api/user/profile-photo - Upload profile photo",
+    "GET /api/category - Get all categories",
+    "POST /api/admin/category - Create category (admin)",
+    "GET /api/product - Get all products",
+    "GET /api/product/:slug - Get product details",
+    "POST /api/admin/product - Create product (admin)",
+    "POST /api/review - Add product review",
+    "GET /api/cart - Get user cart",
+    "POST /api/cart - Add item to cart",
+    "DELETE /api/cart - Remove item from cart",
+    "GET /api/address - Get user addresses",
+    "POST /api/address - Create address",
+    "PATCH /api/address - Update address",
+    "DELETE /api/address - Delete address"
+  ]
+}
